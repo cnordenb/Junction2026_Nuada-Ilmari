@@ -144,3 +144,9 @@
 - Not done: d1 is not part of the forged-log evaluation (the logs were scored without it).
 
 **21:46:48** Tests: 63 passing. The 3 failures were stale tests, not bugs: two shared one IP across all test signups and hit the IP ban added later (tests now give each signup its own documentation-range IP); one expected schools and companies in review, but the graded score allows them (now checks they are never blocked). Added a test for the IP ban: banned after 2 blocked accounts, switch-off lets the IP in, reset removes the ban. Tests run without the d1 model (D1_URL unset), so its factor is skipped there.
+
+**22:08:02** Prompt benchmark for d1 (`scripts/bench_d1.py`, results in `data/bench/d1_benchmark.json`). Small mixed set by request: 40 bots + 40 people from each of two datasets, 160 examples, about 1.3 s each.
+- Datasets: Hugging Face **airt-ml/twitter-human-bots** (CC-BY-SA-3.0, real accounts labelled human/bot; username + bio) and our forged signups (email + username). Also a "mixed" score across both.
+- Results (AUC): production email prompt 0.80 on our signups (best). Name/bio prompts near chance: Twitter 0.50-0.61, signups 0.57-0.70, mixed 0.56-0.60. Note: with 40 per class each AUC is about +/-0.1.
+- Decision: the d1 factor is now email-only (production name prompt dropped) and its weight lowered from 1.5 to 1.0, because the email prompt still flags some real people at P >= 0.5. Factor reads "AI model (d1): email looks machine-made".
+- Added `tests/test_prompts.py`: production prompts are valid d1 questions; the benchmark tests the exact production prompt; factor maths; weight cap; fail-open when the model is down; a live regression set of 12 labelled emails that must keep AUC >= 0.7 (skipped without D1_URL; passed against the live server). Tests: 68 passed, 1 skipped locally.

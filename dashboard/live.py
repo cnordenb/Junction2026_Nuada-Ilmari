@@ -640,8 +640,6 @@ D1_TIMEOUT = float(os.environ.get("D1_TIMEOUT", "2.5"))
 D1_QUESTIONS = {
     "email_machine": {"type": "noul", "instructions": "Does the part of the email before the @ look randomly generated or "
                       "machine-made (random letters, user plus digits, name plus 4 digits, dots or +tags to fake a new address)?"},
-    "name_not_pet": {"type": "noul", "instructions": "Is the horse name not a playful pet name, but a username, a person's "
-                     "full name, an ID or spam?"},
 }
 
 

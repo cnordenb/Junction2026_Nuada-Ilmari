@@ -1,0 +1,177 @@
+{
+  "model": "LiquidAI/d1-omni-600M-GGUF:Q8_0",
+  "n_per_class": 40,
+  "seed": 7,
+  "datasets": {
+    "twitter": {
+      "source": "airt-ml/twitter-human-bots (CC-BY-SA-3.0)",
+      "state": "username + bio",
+      "seconds_per_example": 1.28,
+      "variants": {
+        "prod_name_not_pet": {
+          "auc": 0.566,
+          "precision": 0.5,
+          "recall": 0.2,
+          "fpr": 0.2,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.3,
+          "mean_p_people": 0.248
+        },
+        "name_machine": {
+          "auc": 0.613,
+          "precision": 0.6,
+          "recall": 0.225,
+          "fpr": 0.15,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.35,
+          "mean_p_people": 0.293
+        },
+        "account_bot": {
+          "auc": 0.526,
+          "precision": 0.75,
+          "recall": 0.075,
+          "fpr": 0.025,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.169,
+          "mean_p_people": 0.103
+        },
+        "bio_spam": {
+          "auc": 0.496,
+          "precision": 0.8,
+          "recall": 0.2,
+          "fpr": 0.05,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.202,
+          "mean_p_people": 0.107
+        }
+      }
+    },
+    "signups": {
+      "source": "forged signup logs (our own)",
+      "state": "email + username",
+      "seconds_per_example": 1.274,
+      "variants": {
+        "prod_email_machine": {
+          "auc": 0.801,
+          "precision": 0.667,
+          "recall": 0.75,
+          "fpr": 0.375,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.655,
+          "mean_p_people": 0.417
+        },
+        "email_bot_made": {
+          "auc": 0.681,
+          "precision": null,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.046,
+          "mean_p_people": 0.026
+        },
+        "email_real_person": {
+          "auc": 0.367,
+          "precision": null,
+          "recall": 0.0,
+          "fpr": 0.0,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.059,
+          "mean_p_people": 0.079
+        },
+        "prod_name_not_pet": {
+          "auc": 0.575,
+          "precision": 0.7,
+          "recall": 0.35,
+          "fpr": 0.15,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.407,
+          "mean_p_people": 0.336
+        },
+        "name_machine": {
+          "auc": 0.565,
+          "precision": 0.5,
+          "recall": 0.725,
+          "fpr": 0.725,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.619,
+          "mean_p_people": 0.585
+        },
+        "account_bot": {
+          "auc": 0.703,
+          "precision": 1.0,
+          "recall": 0.025,
+          "fpr": 0.0,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.103,
+          "mean_p_people": 0.026
+        },
+        "bio_spam": {
+          "auc": 0.631,
+          "precision": 0.812,
+          "recall": 0.325,
+          "fpr": 0.075,
+          "n_bots": 40,
+          "n_people": 40,
+          "mean_p_bots": 0.344,
+          "mean_p_people": 0.19
+        }
+      }
+    },
+    "mixed": {
+      "source": "twitter + signups, equal parts",
+      "state": "both",
+      "variants": {
+        "prod_name_not_pet": {
+          "auc": 0.571,
+          "precision": 0.611,
+          "recall": 0.275,
+          "fpr": 0.175,
+          "n_bots": 80,
+          "n_people": 80,
+          "mean_p_bots": 0.353,
+          "mean_p_people": 0.292
+        },
+        "name_machine": {
+          "auc": 0.559,
+          "precision": 0.521,
+          "recall": 0.475,
+          "fpr": 0.438,
+          "n_bots": 80,
+          "n_people": 80,
+          "mean_p_bots": 0.485,
+          "mean_p_people": 0.439
+        },
+        "account_bot": {
+          "auc": 0.598,
+          "precision": 0.8,
+          "recall": 0.05,
+          "fpr": 0.013,
+          "n_bots": 80,
+          "n_people": 80,
+          "mean_p_bots": 0.136,
+          "mean_p_people": 0.065
+        },
+        "bio_spam": {
+          "auc": 0.57,
+          "precision": 0.808,
+          "recall": 0.263,
+          "fpr": 0.062,
+          "n_bots": 80,
+          "n_people": 80,
+          "mean_p_bots": 0.273,
+          "mean_p_people": 0.148
+        }
+      }
+    }
+  }
+}
