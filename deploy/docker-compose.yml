@@ -10,6 +10,7 @@ services:
       SIGNUP_TRUST_PROXY: "1"            # Caddy overwrites X-Forwarded-For, so it can be trusted
       NEIGHBR_HOSTS: ${NEIGHBR_HOSTS:-}   # hosts whose front page is the Neighbr signup
       D1_URL: http://llm:8080             # Liquid AI d1-omni-600M decision model (service below)
+      LFM_URL: http://lfm:8080            # Liquid AI LFM3-VL-2B, AI second opinion (service below)
     volumes:
       - guard-data:/var/guard
     expose:
@@ -19,6 +20,15 @@ services:
     image: ghcr.io/ggml-org/llama.cpp:server
     restart: unless-stopped
     command: ["-hf", "LiquidAI/d1-omni-600M-GGUF:Q8_0", "-b", "4096", "-ub", "4096", "--host", "0.0.0.0", "--port", "8080", "-t", "2"]
+    volumes:
+      - llama-cache:/root/.cache/llama.cpp
+    expose:
+      - "8080"
+  lfm:
+    # llama.cpp server with Liquid AI's LFM3-VL-2B (Q4_K_M): an AI second opinion in JSON, about 3 s per signup.
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command: ["-hf", "LiquidAI/LFM3-VL-2B-GGUF:Q4_K_M", "--host", "0.0.0.0", "--port", "8080", "-t", "2", "-c", "4096", "--jinja"]
     volumes:
       - llama-cache:/root/.cache/llama.cpp
     expose:

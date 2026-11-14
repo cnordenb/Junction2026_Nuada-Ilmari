@@ -1,0 +1,111 @@
+{
+  "examples": 120,
+  "bots": 60,
+  "people": 60,
+  "people_mix": "half ordinary signups, half traps (class, company, families, VPN, newsletter rush)",
+  "seconds_per_example": 3.06,
+  "judges": {
+    "algorithm (score >= 60)": {
+      "auc": 0.903,
+      "cut": 0.6,
+      "precision": 1.0,
+      "recall": 0.817,
+      "fpr": 0.0,
+      "people_flagged": 0
+    },
+    "d1_bot (P >= 0.5)": {
+      "auc": 0.712,
+      "cut": 0.5,
+      "precision": 0.734,
+      "recall": 0.783,
+      "fpr": 0.283,
+      "people_flagged": 17
+    },
+    "d1_kind (P >= 0.5)": {
+      "auc": 0.741,
+      "cut": 0.5,
+      "precision": 0.526,
+      "recall": 1.0,
+      "fpr": 0.9,
+      "people_flagged": 54
+    },
+    "d1_risk (>= 0.5)": {
+      "auc": 0.818,
+      "cut": 0.5,
+      "precision": 0.957,
+      "recall": 0.367,
+      "fpr": 0.017,
+      "people_flagged": 1
+    },
+    "blend (>= 0.55)": {
+      "auc": 0.943,
+      "cut": 0.55,
+      "precision": 1.0,
+      "recall": 0.8,
+      "fpr": 0.0,
+      "people_flagged": 0
+    }
+  },
+  "by_group": {
+    "abuse_alias_farm": {
+      "n": 4,
+      "algorithm_mean": 0.99,
+      "d1_bot_mean": 0.69,
+      "d1_top_kind": "account_farm"
+    },
+    "abuse_daily_drip": {
+      "n": 5,
+      "algorithm_mean": 0.96,
+      "d1_bot_mean": 0.29,
+      "d1_top_kind": "account_farm"
+    },
+    "abuse_proxy_farm": {
+      "n": 19,
+      "algorithm_mean": 1.0,
+      "d1_bot_mean": 0.76,
+      "d1_top_kind": "account_farm"
+    },
+    "abuse_slow_humanlike": {
+      "n": 11,
+      "algorithm_mean": 0.02,
+      "d1_bot_mean": 0.52,
+      "d1_top_kind": "account_farm"
+    },
+    "abuse_tempmail_burst": {
+      "n": 21,
+      "algorithm_mean": 1.0,
+      "d1_bot_mean": 0.75,
+      "d1_top_kind": "simple_script"
+    },
+    "background": {
+      "n": 30,
+      "algorithm_mean": 0.02,
+      "d1_bot_mean": 0.52,
+      "d1_top_kind": "account_farm"
+    },
+    "trap_classroom": {
+      "n": 1,
+      "algorithm_mean": 0.25,
+      "d1_bot_mean": 0.34,
+      "d1_top_kind": "account_farm"
+    },
+    "trap_family": {
+      "n": 4,
+      "algorithm_mean": 0.07,
+      "d1_bot_mean": 0.09,
+      "d1_top_kind": "shared_device"
+    },
+    "trap_promo_burst": {
+      "n": 15,
+      "algorithm_mean": 0.02,
+      "d1_bot_mean": 0.36,
+      "d1_top_kind": "account_farm"
+    },
+    "trap_vpn": {
+      "n": 10,
+      "algorithm_mean": 0.04,
+      "d1_bot_mean": 0.19,
+      "d1_top_kind": "account_farm"
+    }
+  }
+}
