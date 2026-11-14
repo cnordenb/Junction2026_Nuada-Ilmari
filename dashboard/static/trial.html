@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruska Bookings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* A small Finnish booking-software company: warm autumn accent, calm neutrals. */
+:root {
+  --bg: #fbfaf8; --surface: #ffffff; --fg: #1d1a17; --fg2: #5b544c; --line: #e8e3dc;
+  --accent: #b4441f; --accent-ink: #ffffff; --accent-soft: #f7e6dd; --ok: #2c7a4b; --warn: #a06a00; --bad: #b3261e;
+  --display: "Fraunces", Georgia, serif; --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141210; --surface: #1d1a17; --fg: #f2eee9; --fg2: #c2b9ae; --line: #332e29;
+    --accent: #e0703f; --accent-ink: #1a0f0a; --accent-soft: #3a2117; --ok: #5cc28a; --warn: #e2b04a; --bad: #f08079; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
+.logo { font: 700 22px var(--display); display: flex; align-items: center; gap: 8px; }
+.logo span { width: 14px; height: 14px; border-radius: 4px; background: var(--accent); display: inline-block; transform: rotate(45deg); }
+nav a { color: var(--fg2); text-decoration: none; margin-left: 18px; font-size: 15px; }
+.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: start; padding: 40px 0 56px; }
+@media (max-width: 820px) { .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 16px; } }
+h1 { font: 700 clamp(34px, 5vw, 52px)/1.08 var(--display); letter-spacing: -0.02em; margin: 0 0 16px; text-wrap: balance; }
+.lede { font-size: 19px; color: var(--fg2); margin: 0 0 22px; max-width: 34em; }
+.points { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.points li { display: flex; gap: 10px; }
+.points li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; box-shadow: 0 10px 30px rgba(60,40,20,.06); }
+.card h2 { font: 600 24px var(--display); margin: 0 0 4px; }
+.card .sub { color: var(--fg2); margin: 0 0 18px; font-size: 15px; }
+label { display: block; font-size: 14px; font-weight: 500; margin: 14px 0 5px; }
+input[type=text], input[type=email] { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 11px 12px; }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { width: 100%; margin-top: 18px; font: 600 16px var(--body); background: var(--accent); color: var(--accent-ink); border: 0;
+  border-radius: 8px; padding: 13px; cursor: pointer; }
+button:disabled { opacity: .6; cursor: wait; }
+.fine { font-size: 13px; color: var(--fg2); margin-top: 12px; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.result { margin-top: 16px; padding: 14px 16px; border-radius: 10px; font-weight: 500; display: none; }
+.result.allow { display: block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.result.review { display: block; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.result.block { display: block; background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.result.error { display: block; background: var(--accent-soft); color: var(--fg); }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; padding: 8px 0 56px; }
+.feature h3 { font: 600 19px var(--display); margin: 0 0 6px; }
+.feature p { color: var(--fg2); margin: 0; }
+.quote { border-top: 1px solid var(--line); padding: 36px 0; display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
+.quote .avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; font: 700 18px var(--display); color: var(--accent); }
+.quote p { margin: 0; font: 600 20px/1.4 var(--display); }
+.quote small { color: var(--fg2); font-size: 14px; }
+footer { border-top: 1px solid var(--line); padding: 22px 0 40px; font-size: 13px; color: var(--fg2); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+footer a { color: var(--fg2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><div class="logo"><span></span>Ruska Bookings</div>
+    <div><a href="#features">Features</a><a href="#trial">Free trial</a></div></nav>
+
+  <section class="hero">
+    <div>
+      <h1>Online booking for small salons and studios</h1>
+      <p class="lede">Let customers book a haircut, a massage or a pottery class while you work. Ruska sends the reminders, takes the deposit
+        and keeps your calendar tidy. Built in Tampere for one-person businesses.</p>
+      <ul class="points">
+        <li>14 days free, no card needed</li>
+        <li>Your booking page live in ten minutes</li>
+        <li>SMS reminders that cut no-shows in half</li>
+      </ul>
+    </div>
+    <div class="card" id="trial">
+      <h2>Start your free trial</h2>
+      <p class="sub">14 days of everything. Cancel any time.</p>
+      <form id="form" novalidate autocomplete="off">
+        <label for="email">Work email</label>
+        <input id="email" name="email" type="email" required maxlength="200" placeholder="you@yourstudio.fi">
+        <label for="business">Business name</label>
+        <input id="business" name="business" type="text" maxlength="100" placeholder="Studio Aino">
+        <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <button id="submit" type="submit">Start free trial</button>
+        <div id="result" class="result" role="status"></div>
+        <p class="fine">Demo site for Junction 2026. No email is sent and no account is created. Use any address.</p>
+      </form>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="feature"><h3>A booking page that looks like you</h3><p>Your services, prices and opening hours on one page customers can find from Instagram or Google.</p></div>
+    <div class="feature"><h3>Deposits for busy slots</h3><p>Ask for a small deposit on Friday afternoons so last-minute cancellations don't cost you a day's pay.</p></div>
+    <div class="feature"><h3>Reminders that work</h3><p>A text the day before and an hour before. Customers can move their own booking without calling.</p></div>
+  </section>
+
+  <section class="quote">
+    <div class="avatar">LK</div>
+    <div><p>“I stopped answering the phone during haircuts. Bookings went up anyway.”</p><small>Laura K., hair salon owner, Pirkkala</small></div>
+  </section>
+
+  <footer><span>Ruska Bookings is a fictional company made for a hackathon demo.</span>
+    <a id="guardLink" href="/guard">Signup protection by Free-Tier Guard</a></footer>
+</div>
+<script>
+// Signals the guard uses: a device check, how long the form took, the
+// browser's automation flag, and a hidden field people never fill in.
+let firstTouch = null;
+const form = document.getElementById("form");
+form.addEventListener("focusin", () => { if (firstTouch === null) firstTouch = performance.now(); });
+form.addEventListener("keydown", () => { if (firstTouch === null) firstTouch = performance.now(); });
+
+async function deviceId() {
+  const c = document.createElement("canvas");
+  let canvasSig = "";
+  try {
+    const g = c.getContext("2d"); c.width = 200; c.height = 40;
+    g.textBaseline = "top"; g.font = "16px Arial"; g.fillStyle = "#b4441f"; g.fillText("Ruska ✓ 2026", 4, 8);
+    canvasSig = c.toDataURL().slice(-64);
+  } catch (e) {}
+  const parts = [navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
+    screen.colorDepth, devicePixelRatio, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency,
+    navigator.platform, navigator.maxTouchPoints, canvasSig];
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
+  return Array.from(new Uint8Array(buf).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const host = location.hostname;
+if (host.startsWith("trial.")) document.getElementById("guardLink").href = location.protocol + "//guard." + host.slice(6);
+
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const out = document.getElementById("result"), btn = document.getElementById("submit");
+  out.className = "result"; btn.disabled = true; btn.textContent = "Creating your trial…";
+  try {
+    const res = await fetch("/api/trial/signup", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email: document.getElementById("email").value, business: document.getElementById("business").value,
+        website: document.getElementById("website").value, device_id: await deviceId(),
+        fill_ms: firstTouch === null ? 0 : Math.round(performance.now() - firstTouch), webdriver: !!navigator.webdriver})});
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Something went wrong. Please try again.");
+    out.className = "result " + body.action; out.textContent = body.message;
+    if (body.action === "allow") form.reset();
+    firstTouch = null;
+  } catch (e) {
+    out.className = "result error"; out.textContent = e.message;
+  } finally { btn.disabled = false; btn.textContent = "Start free trial"; }
+});
+</script>
+</body>
+</html>

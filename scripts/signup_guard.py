@@ -1,0 +1,593 @@
+"""Find fake-account swarms in a stream of free-tier signups.
+
+Two layers, both explained in plain language:
+
+  1. Per-signup checks: throwaway inbox, several accounts on one inbox
+     (Gmail dots and +tags), automation browser, datacenter or VPN network,
+     one device behind many accounts.
+  2. Swarm layer: signups that share rare details (device, inbox, email
+     template, browser build, network) are linked into groups, and each
+     group's timing is scored against random groups from the same stream with
+     the team's synchrony scorer (sync_score.py). A group needs shared
+     identity details or a hosting network *and* unusual timing, or high
+     per-signup risk, before anything is blocked.
+
+Actions: "block", "review" (ask a person, or show a challenge), "allow".
+A shared school or company email domain is treated as an organisation
+signing up together and sent to review, never blocked.
+
+Usage:
+    python scripts/signup_guard.py data/signups/demo_signups.csv
+    python scripts/signup_guard.py data/signups/demo_signups.csv --label-col label
+    python scripts/signup_guard.py data/signups/demo_signups.csv --json --out report.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import re
+import sys
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy import sparse
+from scipy.sparse.csgraph import connected_components
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from signup_lists import (AUTOMATION_UA, DOTS_IGNORED, FREE_PROVIDERS, HOSTING_ASNS,  # noqa: E402
+                          PLUS_TAGS, disposable_domains)
+from swarm_common import format_duration, is_positive_label, parse_times, read_table, to_iso  # noqa: E402
+from sync_score import SyncScorer  # noqa: E402
+
+FIELDS = {
+    "time": ["created_at", "signup_time", "registered_at", "timestamp", "time", "date"],
+    "email": ["email", "email_address", "mail"],
+    "username": ["username", "user_name", "login", "handle", "name"],
+    "ip": ["ip", "ip_address", "client_ip", "remote_addr"],
+    "asn": ["asn", "as_number"],
+    "asn_org": ["asn_org", "as_org", "isp", "network"],
+    "user_agent": ["user_agent", "useragent", "ua", "browser"],
+    "device_id": ["device_id", "fingerprint", "visitor_id", "device"],
+    "id": ["id", "user_id", "account_id", "signup_id"],
+}
+
+# How much each kind of shared detail counts when linking two signups.
+# Identity details are the ones a fake-account operator has to fabricate;
+# network details are weak because offices, schools and VPNs share them.
+TOKEN_WEIGHTS = {"device": 3.0, "inbox": 3.0, "edomain": 1.0, "etemplate": 1.2, "utemplate": 0.8,
+                 "ua": 1.0, "ip": 1.0, "net": 0.8, "asn": 0.6}
+COMMON_SHARE = 0.03          # details shared by more than 3% of signups are too common to be evidence
+COMMON_MIN = 50
+DEFAULT_LINK = 2.0           # total weight of shared details needed to link two signups
+DEFAULT_MIN_SIZE = 5
+DEFAULT_HALF_LIFE = 600.0
+
+SIGNAL_POINTS = {"disposable": 45, "inbox_reuse": 50, "automation": 50, "hosting": 10,
+                 "device_farm": 35, "no_fingerprint": 10,
+                 # live signup form only
+                 "honeypot": 60, "webdriver": 50, "fast_fill": 30}
+FAST_FILL_SECONDS = 1.5
+BLOCK_RISK, REVIEW_RISK = 60, 35
+
+CAVEATS = [
+    "This flags patterns for a person to act on. Nothing here identifies who is behind an account.",
+    "Network checks use small built-in lists of hosting providers and throwaway email services; a "
+    "real deployment needs maintained lists.",
+    "An attacker who varies every recorded detail and signs up at ordinary times is not caught "
+    "(see abuse_slow_humanlike in the demo).",
+    "Schools and companies signing up together share many details; they are sent to review, not blocked.",
+    "All accuracy figures so far come from simulated signups written by the same team as the detector.",
+]
+
+
+# ---------------------------------------------------------------- loading
+
+@dataclass
+class Signups:
+    frame: pd.DataFrame          # standard columns: id, time, email, username, ip, asn, asn_org, user_agent, device_id
+    columns_used: dict
+    rows_read: int
+    labels: list[str] | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+def _pick(columns: list[str], names: list[str]) -> str | None:
+    lower = {c.lower().strip(): c for c in columns}
+    return next((lower[n] for n in names if n in lower), None)
+
+
+def load_signups(path: str | Path, label_col: str | None = None, max_rows: int | None = None) -> Signups:
+    raw = read_table(path)
+    columns = list(raw.columns)
+    used = {key: _pick(columns, names) for key, names in FIELDS.items()}
+    if label_col and label_col not in raw.columns:
+        raise ValueError(f"No column named {label_col!r}. Columns: {', '.join(columns)}")
+    if not used["time"]:
+        raise ValueError(f"Could not find the signup time column. Columns: {', '.join(columns)}")
+    if not used["email"]:
+        raise ValueError(f"Could not find the email column. Columns: {', '.join(columns)}")
+    rows_read = len(raw)
+    warnings = []
+    if max_rows and rows_read > max_rows:
+        raw = raw.iloc[:max_rows]
+        warnings.append(f"The file has {rows_read:,} rows; only the first {max_rows:,} were analysed.")
+    frame = pd.DataFrame({key: (raw[col] if col else "") for key, col in used.items() if key != "time"})
+    if not used["id"]:
+        frame["id"] = [str(i + 1) for i in range(len(raw))]
+    frame["time"] = parse_times(raw[used["time"]])
+    frame = frame.fillna("")
+    for col in frame.columns:
+        if col != "time":
+            frame[col] = frame[col].astype(str).str.strip()
+    keep = ~np.isnan(frame["time"].to_numpy()) & (frame["email"] != "")
+    dropped = int((~keep).sum())
+    if dropped:
+        warnings.append(f"{dropped:,} rows were skipped because the time or email was missing or unreadable.")
+    labels = raw[label_col].astype(str).tolist() if label_col else None
+    if labels is not None:
+        labels = [labels[i] for i in np.flatnonzero(keep)]
+    frame = frame[keep].reset_index(drop=True)
+    if frame.empty:
+        raise ValueError("No usable rows.")
+    missing = [k for k in ("ip", "asn", "user_agent", "device_id") if not used[k]]
+    if missing:
+        warnings.append("Not in this file, so those checks were skipped: " + ", ".join(missing) + ".")
+    return Signups(frame, used, rows_read, labels, warnings)
+
+
+# ---------------------------------------------------------------- features
+
+def split_email(email: str) -> tuple[str, str]:
+    local, _, domain = email.strip().lower().rpartition("@")
+    return local, domain
+
+
+def canonical_inbox(email: str) -> str:
+    """The inbox an address really reaches: Gmail ignores dots, and many
+    providers ignore anything after '+'."""
+    local, domain = split_email(email)
+    if domain == "googlemail.com":
+        domain = "gmail.com"
+    if domain in PLUS_TAGS:
+        local = local.split("+", 1)[0]
+    if domain in DOTS_IGNORED:
+        local = local.replace(".", "")
+    return f"{local}@{domain}"
+
+
+def template(text: str) -> str:
+    """Shape of a name: letter runs become 'a', digit runs become '9' with
+    their length, other characters stay. 'user48213' -> 'a9{5}'."""
+    out = re.sub(r"[^\W\d_]+", "a", text.lower())
+    return re.sub(r"\d+", lambda m: f"9{{{len(m.group())}}}", out)
+
+
+def subnet(ip: str) -> str:
+    if ip.count(".") == 3:
+        return ip.rsplit(".", 1)[0] + ".0/24"
+    if ":" in ip:
+        return ":".join(ip.split(":")[:3]) + "::/48"
+    return ""
+
+
+def is_automation(ua: str) -> bool:
+    ua = ua.lower()
+    return any(fragment in ua for fragment in AUTOMATION_UA)
+
+
+def tokens_for(row: dict) -> list[tuple[str, str]]:
+    local, domain = split_email(row["email"])
+    tokens = [("inbox", canonical_inbox(row["email"])), ("edomain", domain),
+              ("etemplate", f"{template(local)}@{domain}")]
+    if row["username"]:
+        tokens.append(("utemplate", template(row["username"])))
+    if row["device_id"]:
+        tokens.append(("device", row["device_id"]))
+    if row["user_agent"]:
+        tokens.append(("ua", row["user_agent"]))
+    if row["ip"]:
+        tokens.append(("ip", row["ip"]))
+        if subnet(row["ip"]):
+            tokens.append(("net", subnet(row["ip"])))
+    if row["asn"]:
+        tokens.append(("asn", row["asn"]))
+    return tokens
+
+
+def signup_signals(frame: pd.DataFrame) -> list[list[dict]]:
+    """Per-signup checks. Each signal has points and a plain-language reason."""
+    throwaway = disposable_domains()
+    inbox = frame["email"].map(canonical_inbox)
+    spellings = frame.groupby(inbox)["email"].transform(lambda s: s.str.lower().nunique())
+    per_inbox = inbox.map(inbox.value_counts())
+    device_counts = frame["device_id"].map(frame["device_id"].value_counts())
+    has_fp_column = (frame["device_id"] != "").mean() >= 0.5
+    out = []
+    for i, row in enumerate(frame.to_dict("records")):
+        signals = []
+        _, domain = split_email(row["email"])
+        if domain in throwaway:
+            signals.append({"signal": "disposable", "points": SIGNAL_POINTS["disposable"],
+                            "reason": f"Email is from a throwaway inbox service ({domain})."})
+        if per_inbox.iat[i] > 1 and spellings.iat[i] > 1:
+            signals.append({"signal": "inbox_reuse", "points": SIGNAL_POINTS["inbox_reuse"],
+                            "reason": f"{per_inbox.iat[i]} accounts use spellings of one inbox "
+                                      f"({inbox.iat[i]}); the provider ignores dots or +tags."})
+        if row["user_agent"] and is_automation(row["user_agent"]):
+            signals.append({"signal": "automation", "points": SIGNAL_POINTS["automation"],
+                            "reason": "The browser identifies itself as an automation tool."})
+        try:
+            asn = int(float(row["asn"])) if row["asn"] else None
+        except ValueError:
+            asn = None
+        if asn in HOSTING_ASNS:
+            signals.append({"signal": "hosting", "points": SIGNAL_POINTS["hosting"],
+                            "reason": f"Signed up from a datacenter or VPN network ({HOSTING_ASNS[asn]}). "
+                                      "Privacy-minded people do this too, so on its own it is weak."})
+        if row["device_id"] and device_counts.iat[i] >= DEFAULT_MIN_SIZE:
+            signals.append({"signal": "device_farm", "points": SIGNAL_POINTS["device_farm"],
+                            "reason": f"The same device created {device_counts.iat[i]} accounts."})
+        if has_fp_column and not row["device_id"]:
+            signals.append({"signal": "no_fingerprint", "points": SIGNAL_POINTS["no_fingerprint"],
+                            "reason": "The browser did not run the device check on the signup page."})
+        # Signals a live signup form can collect (absent from plain files).
+        if str(row.get("honeypot", "")) in {"1", "true", "True"}:
+            signals.append({"signal": "honeypot", "points": SIGNAL_POINTS["honeypot"],
+                            "reason": "Filled in a hidden form field that people never see."})
+        if str(row.get("webdriver", "")) in {"1", "true", "True"}:
+            signals.append({"signal": "webdriver", "points": SIGNAL_POINTS["webdriver"],
+                            "reason": "The browser reports it is remote-controlled (navigator.webdriver)."})
+        fill = str(row.get("fill_ms", "")).strip()
+        if fill:
+            try:
+                fill_s = float(fill) / 1000
+            except ValueError:
+                fill_s = None
+            if fill_s is not None and fill_s < FAST_FILL_SECONDS:
+                signals.append({"signal": "fast_fill", "points": SIGNAL_POINTS["fast_fill"],
+                                "reason": f"The form was filled in {fill_s:.1f} s; people take several seconds."})
+        out.append(signals)
+    return out
+
+
+# ---------------------------------------------------------------- linking
+
+def link_matrix(frame: pd.DataFrame) -> tuple[sparse.csr_matrix, dict]:
+    """Rows = signups, columns = details shared by 2 or more signups, entries
+    = sqrt(weight). Then (x @ x.T)[i, j] is the total weight of the details
+    signups i and j share. Details shared by too many signups (gmail.com, the
+    current Chrome build, a big home-internet provider) are left out: they
+    are not evidence that two signups belong together."""
+    rows = frame.to_dict("records")
+    token_rows = [set(tokens_for(r)) for r in rows]
+    df = Counter(tok for toks in token_rows for tok in toks)
+    n = len(rows)
+    common = max(COMMON_MIN, COMMON_SHARE * n)
+    vocab: dict[tuple[str, str], int] = {}
+    data, ri, ci = [], [], []
+    for r, toks in enumerate(token_rows):
+        for tok in toks:
+            if df[tok] < 2 or df[tok] > common:
+                continue
+            if tok[0] == "edomain" and tok[1] in FREE_PROVIDERS:
+                continue
+            c = vocab.setdefault(tok, len(vocab))
+            data.append(math.sqrt(TOKEN_WEIGHTS[tok[0]]))
+            ri.append(r)
+            ci.append(c)
+    x = sparse.csr_matrix((data, (ri, ci)), shape=(n, max(len(vocab), 1)))
+    return x, {"tokens_used": len(vocab), "common_cutoff": int(common)}
+
+
+# ---------------------------------------------------------------- clusters
+
+def _share(values: list[str]) -> tuple[str, float]:
+    values = [v for v in values if v]
+    if not values:
+        return "", 0.0
+    value, count = Counter(values).most_common(1)[0]
+    return value, count / len(values)
+
+
+def _evidence(members: pd.DataFrame) -> list[dict]:
+    """Details most of the group shares, in plain language, strongest first."""
+    n = len(members)
+    found = []
+    inbox, s = _share(members["email"].map(canonical_inbox).tolist())
+    distinct_inboxes = members["email"].map(canonical_inbox).nunique()
+    if distinct_inboxes <= max(1, n // 4):
+        repeated = {k for k, v in Counter(members["email"].map(canonical_inbox)).items() if v > 1}
+        found.append({"kind": "identity", "key": "inbox",
+                      "text": f"{n} accounts lead to only {distinct_inboxes} real inbox(es), e.g. {inbox}.",
+                      "match": lambda r, v=repeated: canonical_inbox(r["email"]) in v})
+    devices = [d for d in members["device_id"] if d]
+    if devices and len(set(devices)) <= max(1, len(devices) // 4):
+        repeated = {k for k, v in Counter(devices).items() if v > 1}
+        found.append({"kind": "identity", "key": "device",
+                      "text": f"{len(devices)} accounts came from only {len(set(devices))} device(s).",
+                      "match": lambda r, v=repeated: r["device_id"] in v})
+    tmpl, s = _share([f"{template(split_email(e)[0])}@{split_email(e)[1]}" for e in members["email"]])
+    if s >= 0.7 and not re.fullmatch(r"a(\.a)?@.*", tmpl):
+        found.append({"kind": "identity", "key": "etemplate",
+                      "text": f"{s:.0%} of email addresses follow one pattern ({tmpl}, where a = letters, "
+                              "9{n} = n digits).",
+                      "match": lambda r, v=tmpl: f"{template(split_email(r['email'])[0])}@{split_email(r['email'])[1]}" == v})
+    domain, s = _share([split_email(e)[1] for e in members["email"]])
+    throwaway = disposable_domains()
+    n_throwaway = sum(split_email(e)[1] in throwaway for e in members["email"])
+    if n_throwaway >= 0.5 * n:
+        found.append({"kind": "identity", "key": "disposable",
+                      "text": f"{n_throwaway} of {n} use throwaway email services.",
+                      "match": lambda r, v=throwaway: split_email(r["email"])[1] in v})
+    elif s >= 0.7 and domain not in FREE_PROVIDERS:
+        found.append({"kind": "organisation", "key": "edomain",
+                      "text": f"{s:.0%} use one organisation's email domain ({domain}).",
+                      "match": lambda r, v=domain: split_email(r["email"])[1] == v})
+    ua, s = _share(members["user_agent"].tolist())
+    if ua and s >= 0.7:
+        label = "an automation browser" if is_automation(ua) else "one exact browser build"
+        found.append({"kind": "identity" if is_automation(ua) else "software", "key": "ua",
+                      "text": f"{s:.0%} use {label}: {ua[:90]}",
+                      "match": lambda r, v=ua: r["user_agent"] == v})
+    ip, s = _share(members["ip"].tolist())
+    if ip and s >= 0.5:
+        found.append({"kind": "network", "key": "ip", "text": f"{s:.0%} share one IP address.",
+                      "match": lambda r, v=ip: r["ip"] == v})
+    else:
+        net, s = _share([subnet(i) for i in members["ip"]])
+        if net and s >= 0.5:
+            found.append({"kind": "network", "key": "net", "text": f"{s:.0%} come from one /24 address block.",
+                          "match": lambda r, v=net: subnet(r["ip"]) == v})
+    asn, s = _share(members["asn"].tolist())
+    try:
+        asn_int = int(float(asn)) if asn else None
+    except ValueError:
+        asn_int = None
+    if asn_int in HOSTING_ASNS and s >= 0.5:
+        found.append({"kind": "hosting", "key": "asn",
+                      "text": f"{s:.0%} signed up from {HOSTING_ASNS[asn_int]}, a datacenter or VPN network.",
+                      "match": lambda r, v=asn: r["asn"] == v})
+    return found
+
+
+def _timing_text(sync: dict) -> str:
+    pattern = sync.get("pattern")
+    span = format_duration(sync.get("span_seconds") or 0)
+    if not pattern:
+        return f"Created over {span} with ordinary timing."
+    return {"burst": f"Created closer together than chance explains (all within {span}).",
+            "regular": f"Created at near-constant intervals, about every "
+                       f"{format_duration(sync.get('mean_gap') or 0)}, like a timer.",
+            "hourly": "Created at the same minute of different hours.",
+            "daily": f"Created at the same time of day on different days ({span} in total)."}[pattern]
+
+
+def judge_cluster(members: pd.DataFrame, risks: np.ndarray, sync: dict, cohesion: float) -> dict:
+    evidence = _evidence(members)
+    kinds = {e["kind"] for e in evidence}
+    keys = {e["key"] for e in evidence}
+    mean_risk = float(risks.mean())
+    timing = sync["sync"]
+    organisation = ("organisation" in kinds and not ({"inbox", "device", "disposable"} & keys)
+                    and mean_risk < 20)
+    identity = "identity" in kinds
+    software = "software" in kinds
+    hosting = "hosting" in kinds
+    why = []
+    if organisation:
+        action = "review"
+        why.append("Looks like a school or company signing up together: shared organisation email "
+                   "domain, no shared devices or throwaway inboxes. Not blocked; worth a human look.")
+    elif mean_risk >= 40:
+        action = "block"
+        why.append(f"Most accounts already fail individual checks (average risk {mean_risk:.0f}/100).")
+    elif identity and timing >= 30:
+        action = "block"
+        why.append("Shared identity details plus unusual timing.")
+    elif (hosting or software) and timing >= 50:
+        action = "block"
+        why.append("Same network or browser build plus strongly unusual timing.")
+    elif identity or timing >= 30 or mean_risk >= 20:
+        action = "review"
+        why.append("Some shared details or unusual timing, but not enough to block.")
+    else:
+        action = "allow"
+        why.append("Shared details are weak and the timing is ordinary.")
+    return {"action": action, "organisation": organisation, "evidence": evidence,
+            "timing": _timing_text(sync), "why": why, "mean_risk": round(mean_risk, 1),
+            "shared_weight": round(cohesion, 2)}
+
+
+# ---------------------------------------------------------------- analysis
+
+ACTION_RANK = {"allow": 0, "review": 1, "block": 2}
+
+
+def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN_SIZE,
+            half_life: float = DEFAULT_HALF_LIFE, sample: int = 30, per_row: bool = False) -> dict:
+    """per_row=True adds "risk", "reasons" and "cluster_of" (group id or -1)
+    for every row, plus each group's member indices as "members"; the live
+    demo uses these to explain every signup."""
+    frame = su.frame
+    n = len(frame)
+    times = frame["time"].to_numpy(dtype=float)
+    signals = signup_signals(frame)
+    risk = np.array([min(100, sum(s["points"] for s in sig)) for sig in signals], dtype=float)
+    action = np.where(risk >= BLOCK_RISK, "block", np.where(risk >= REVIEW_RISK, "review", "allow")).astype(object)
+    reason_src = ["signup checks" if a != "allow" else "" for a in action]
+
+    x, link_info = link_matrix(frame)
+    sim = (x @ x.T).tocsr()
+    sim.data[sim.data < link] = 0
+    sim.eliminate_zeros()
+    n_comp, comp = connected_components(sim, directed=False)
+    sizes = np.bincount(comp)
+    scorer = SyncScorer(times, half_life)
+    clusters = []
+    cluster_of = np.full(n, -1)
+    for c in np.flatnonzero(sizes >= min_size):
+        idx = np.flatnonzero(comp == c)
+        sub = (x[idx] @ x[idx].T).toarray()
+        cohesion = float((sub.sum() - np.trace(sub)) / max(len(idx) * (len(idx) - 1), 1))
+        sync = scorer.score(times[idx])
+        verdict = judge_cluster(frame.iloc[idx], risk[idx], sync, cohesion)
+        cid = len(clusters) + 1
+        cluster_of[idx] = cid
+        # A member is blocked only if it carries the group's evidence itself
+        # (two of the shared details, or the only one); the rest go to review.
+        # When the group's case rests on identity details (device, inbox,
+        # email pattern, throwaway or automation), a member must carry one of
+        # those: sharing only the network or browser with a farm is not enough.
+        need = min(2, len(verdict["evidence"]))
+        identity_ev = [e for e in verdict["evidence"] if e["kind"] == "identity"]
+        for i in idx:
+            mine = verdict["action"]
+            if mine == "block":
+                row = frame.iloc[i]
+                carried = sum(bool(e["match"](row)) for e in verdict["evidence"])
+                if carried < need or (identity_ev and not any(e["match"](row) for e in identity_ev)):
+                    mine = "review"
+            if ACTION_RANK[mine] > ACTION_RANK[action[i]]:
+                action[i] = mine
+                reason_src[i] = f"group {cid}"
+        for e in verdict["evidence"]:
+            e.pop("match")
+        order = idx[np.argsort(times[idx])]
+        clusters.append({
+            "id": cid, "size": int(len(idx)), **verdict,
+            "sync": round(float(sync["sync"]), 1), "pattern": sync["pattern"],
+            "beats_random": sync["beats_random"],
+            "first": to_iso(times[idx].min()), "last": to_iso(times[idx].max()),
+            "signups": [_row(frame, i, risk, signals) for i in order[:sample]],
+            "_idx": idx,
+        })
+    clusters.sort(key=lambda c: (-ACTION_RANK[c["action"]], -c["size"]))
+
+    report = {
+        "dataset": {"rows_read": su.rows_read, "signups": n, "columns_used": su.columns_used,
+                    "warnings": su.warnings},
+        "settings": {"link": link, "min_size": min_size, "half_life_seconds": half_life,
+                     "common_cutoff": link_info["common_cutoff"]},
+        "totals": {a: int((action == a).sum()) for a in ("block", "review", "allow")},
+        "clusters": clusters,
+        "individual": [_row(frame, i, risk, signals) for i in np.flatnonzero((risk >= REVIEW_RISK) & (cluster_of < 0))[:sample]],
+        "caveats": CAVEATS,
+    }
+    if su.labels is not None:
+        report["evaluation"] = evaluate(su, action, clusters)
+    for c in clusters:
+        idx = c.pop("_idx")
+        if per_row:
+            c["members"] = idx.tolist()
+    report["actions"] = action.tolist()
+    if per_row:
+        report["risk"] = risk.astype(int).tolist()
+        report["reasons"] = [[s["reason"] for s in sig] for sig in signals]
+        report["cluster_of"] = cluster_of.tolist()
+    return report
+
+
+def _row(frame: pd.DataFrame, i: int, risk: np.ndarray, signals: list[list[dict]]) -> dict:
+    r = frame.iloc[i]
+    return {"id": r["id"], "time": to_iso(r["time"]), "email": r["email"], "username": r["username"],
+            "ip": r["ip"], "asn_org": r["asn_org"], "user_agent": r["user_agent"][:120],
+            "device_id": r["device_id"], "risk": int(risk[i]),
+            "reasons": [s["reason"] for s in signals[i]]}
+
+
+def _metrics(truth: np.ndarray, flagged: np.ndarray) -> dict:
+    tp = int((truth & flagged).sum())
+    fp = int((~truth & flagged).sum())
+    fn = int((truth & ~flagged).sum())
+    tn = int((~truth & ~flagged).sum())
+    return {"tp": tp, "fp": fp, "fn": fn, "tn": tn,
+            "precision": round(100 * tp / (tp + fp), 1) if tp + fp else None,
+            "recall": round(100 * tp / (tp + fn), 1) if tp + fn else None,
+            "false_positive_rate": round(100 * fp / (fp + tn), 2) if fp + tn else None}
+
+
+def evaluate(su: Signups, action: np.ndarray, clusters: list[dict]) -> dict:
+    labels = su.labels
+    truth = np.array([is_positive_label(l) for l in labels])
+    blocked = action == "block"
+    touched = action != "allow"
+    # Per scenario: the label, or the note column for innocent look-alikes when present.
+    raw = read_table_note(su)
+    groups = [l if is_positive_label(l) or not raw else raw[i] for i, l in enumerate(labels)]
+    by = []
+    for g in sorted(set(groups), key=lambda g: (not is_positive_label(g.split(":")[0]), g)):
+        m = np.array([x == g for x in groups])
+        by.append({"group": g, "abusive": bool(truth[m][0]), "signups": int(m.sum()),
+                   "blocked": int(blocked[m].sum()), "review": int((action[m] == "review").sum())})
+    return {"block": _metrics(truth, blocked), "block_or_review": _metrics(truth, touched), "by_group": by}
+
+
+def read_table_note(su: Signups) -> list[str] | None:
+    return su.frame["note"].tolist() if "note" in su.frame.columns else None
+
+
+# ---------------------------------------------------------------- CLI
+
+def print_report(report: dict, show: int = 8) -> None:
+    d = report["dataset"]
+    print(f"{d['signups']:,} signups analysed.")
+    for w in d["warnings"]:
+        print(f"  note: {w}")
+    t = report["totals"]
+    print(f"Block {t['block']}, review {t['review']}, allow {t['allow']}.\n")
+    for c in report["clusters"][:show]:
+        print(f"[{c['action'].upper()}] group {c['id']}: {c['size']} signups, {c['first']} to {c['last']}")
+        for e in c["evidence"]:
+            print(f"    - {e['text']}")
+        print(f"    - {c['timing']}")
+        for w in c["why"]:
+            print(f"    => {w}")
+        print()
+    if "evaluation" in report:
+        ev = report["evaluation"]
+        for name in ("block", "block_or_review"):
+            m = ev[name]
+            print(f"{name:>16}: precision {m['precision']}%  recall {m['recall']}%  "
+                  f"false-positive rate {m['false_positive_rate']}%  (tp {m['tp']}, fp {m['fp']}, fn {m['fn']})")
+        print()
+        print(f"{'group':<34}{'signups':>8}{'blocked':>9}{'review':>8}")
+        for g in ev["by_group"]:
+            print(f"{g['group']:<34}{g['signups']:>8}{g['blocked']:>9}{g['review']:>8}")
+    print("\nCaveats:")
+    for c in report["caveats"]:
+        print(f"  - {c}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("path")
+    p.add_argument("--label-col", help="answer-key column; prints precision, recall and false-positive rate")
+    p.add_argument("--link", type=float, default=DEFAULT_LINK, help="total weight of shared details needed to link two signups")
+    p.add_argument("--min-size", type=int, default=DEFAULT_MIN_SIZE)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--out")
+    args = p.parse_args(argv)
+    su = load_signups(args.path, args.label_col)
+    note = read_table(args.path).get("note")
+    if note is not None and args.label_col:
+        su.frame["note"] = note.iloc[: len(su.frame)].tolist() if len(note) == len(su.frame) else ""
+    report = analyse(su)
+    report.pop("actions")
+    if args.json or args.out:
+        text = json.dumps(report, indent=2, ensure_ascii=False)
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+        else:
+            print(text)
+    if not args.json:
+        print_report(report)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

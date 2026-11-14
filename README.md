@@ -6,6 +6,16 @@ It flags patterns for a person to review. It does not identify who is behind a p
 
 How it works, measured accuracy and known limits: [docs/swarm-detector.md](docs/swarm-detector.md).
 
+**Live demo:** a fictional small business's free-trial site guarded in real time, a live dashboard, and an attack script to run from a laptop. Runbook and deployment: [docs/live-demo.md](docs/live-demo.md).
+
+**Free-tier guard** (same engine, applied to signups): finds swarms of fake accounts on a free plan, such as throwaway inboxes, Gmail alias farms, device farms behind residential proxies, and nightly batches from rented servers. Page `/signups`; details, accuracy and limits in [docs/signup-guard.md](docs/signup-guard.md).
+
+```bash
+.venv/bin/python scripts/signup_guard.py data/signups/demo_signups.csv --label-col label
+.venv/bin/python scripts/eval_signups.py          # accuracy on 10 simulated streams
+.venv/bin/python data/make_signup_data.py --hard  # regenerate the demo stream (--hard: smarter attackers)
+```
+
 ## Requirements
 
 - **Python 3.12** (developed and tested on 3.12.9, Windows 11). Older versions have not been tried.
@@ -105,7 +115,7 @@ An `id` column is used if present; otherwise rows are numbered. Rows with empty 
 .venv\Scripts\python -m pytest
 ```
 
-35 tests covering both scores, the detector on the demo dataset and the dashboard API. They take about 15 seconds.
+58 tests covering both scores, the detector on the demo dataset, the signup guard and the dashboard API. They take about 15 seconds.
 
 ## Optional: semantic mode
 

@@ -14,8 +14,8 @@ COPY dashboard ./dashboard
 COPY data ./data
 
 # Run as an unprivileged user; uploads go to a directory that user owns.
-RUN useradd --create-home swarm && mkdir -p /var/swarm_uploads && chown swarm /var/swarm_uploads
-ENV SWARM_UPLOAD_DIR=/var/swarm_uploads
+RUN useradd --create-home swarm && mkdir -p /var/swarm_uploads /var/guard && chown swarm /var/swarm_uploads /var/guard
+ENV SWARM_UPLOAD_DIR=/var/swarm_uploads GUARD_DB=/var/guard/guard.sqlite
 USER swarm
 
 EXPOSE 8000

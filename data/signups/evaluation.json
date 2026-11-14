@@ -1,0 +1,214 @@
+{
+  "standard": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "block": {
+      "tp": 750,
+      "fp": 0,
+      "fn": 125,
+      "tn": 16864,
+      "precision": 100.0,
+      "recall": 85.7,
+      "false_positive_rate": 0.0
+    },
+    "block_or_review": {
+      "tp": 750,
+      "fp": 256,
+      "fn": 125,
+      "tn": 16608,
+      "precision": 74.6,
+      "recall": 85.7,
+      "false_positive_rate": 1.52
+    },
+    "by_group": [
+      {
+        "group": "abuse_alias_farm",
+        "abusive": true,
+        "signups": 120,
+        "blocked": 120,
+        "review": 0
+      },
+      {
+        "group": "abuse_daily_drip",
+        "abusive": true,
+        "signups": 105,
+        "blocked": 105,
+        "review": 0
+      },
+      {
+        "group": "abuse_proxy_farm",
+        "abusive": true,
+        "signups": 300,
+        "blocked": 300,
+        "review": 0
+      },
+      {
+        "group": "abuse_slow_humanlike",
+        "abusive": true,
+        "signups": 125,
+        "blocked": 0,
+        "review": 0
+      },
+      {
+        "group": "abuse_tempmail_burst",
+        "abusive": true,
+        "signups": 225,
+        "blocked": 225,
+        "review": 0
+      },
+      {
+        "group": "background",
+        "abusive": false,
+        "signups": 15000,
+        "blocked": 0,
+        "review": 50
+      },
+      {
+        "group": "trap_classroom",
+        "abusive": false,
+        "signups": 140,
+        "blocked": 0,
+        "review": 140
+      },
+      {
+        "group": "trap_family",
+        "abusive": false,
+        "signups": 464,
+        "blocked": 0,
+        "review": 3
+      },
+      {
+        "group": "trap_promo_burst",
+        "abusive": false,
+        "signups": 750,
+        "blocked": 0,
+        "review": 1
+      },
+      {
+        "group": "trap_team_onboarding",
+        "abusive": false,
+        "signups": 60,
+        "blocked": 0,
+        "review": 60
+      },
+      {
+        "group": "trap_vpn",
+        "abusive": false,
+        "signups": 450,
+        "blocked": 0,
+        "review": 2
+      }
+    ]
+  },
+  "hard": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "block": {
+      "tp": 645,
+      "fp": 0,
+      "fn": 230,
+      "tn": 16864,
+      "precision": 100.0,
+      "recall": 73.7,
+      "false_positive_rate": 0.0
+    },
+    "block_or_review": {
+      "tp": 750,
+      "fp": 261,
+      "fn": 125,
+      "tn": 16603,
+      "precision": 74.2,
+      "recall": 85.7,
+      "false_positive_rate": 1.55
+    },
+    "by_group": [
+      {
+        "group": "abuse_alias_farm",
+        "abusive": true,
+        "signups": 120,
+        "blocked": 120,
+        "review": 0
+      },
+      {
+        "group": "abuse_daily_drip",
+        "abusive": true,
+        "signups": 105,
+        "blocked": 0,
+        "review": 105
+      },
+      {
+        "group": "abuse_proxy_farm",
+        "abusive": true,
+        "signups": 300,
+        "blocked": 300,
+        "review": 0
+      },
+      {
+        "group": "abuse_slow_humanlike",
+        "abusive": true,
+        "signups": 125,
+        "blocked": 0,
+        "review": 0
+      },
+      {
+        "group": "abuse_tempmail_burst",
+        "abusive": true,
+        "signups": 225,
+        "blocked": 225,
+        "review": 0
+      },
+      {
+        "group": "background",
+        "abusive": false,
+        "signups": 15000,
+        "blocked": 0,
+        "review": 50
+      },
+      {
+        "group": "trap_classroom",
+        "abusive": false,
+        "signups": 140,
+        "blocked": 0,
+        "review": 140
+      },
+      {
+        "group": "trap_family",
+        "abusive": false,
+        "signups": 464,
+        "blocked": 0,
+        "review": 5
+      },
+      {
+        "group": "trap_promo_burst",
+        "abusive": false,
+        "signups": 750,
+        "blocked": 0,
+        "review": 3
+      },
+      {
+        "group": "trap_team_onboarding",
+        "abusive": false,
+        "signups": 60,
+        "blocked": 0,
+        "review": 60
+      },
+      {
+        "group": "trap_vpn",
+        "abusive": false,
+        "signups": 450,
+        "blocked": 0,
+        "review": 3
+      }
+    ]
+  }
+}

@@ -1,0 +1,316 @@
+<title>Free-Tier Guard</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; the pipeline diagram and the worked example break out wider. Signal colours (block / review / allow) are kept apart from the accent. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --fg: #14181f; --fg2: #4a5262; --muted: #7a8394;
+  --line: #dde1e8; --wash: #eceff4; --accent: #2457c5; --accent-soft: #e3ebfb;
+  --block: #c8342f; --block-soft: #fbe6e5; --review: #a86f00; --review-soft: #fbf0d9;
+  --allow: #23804f; --allow-soft: #e1f3e8; --hit: #fff1b8;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218; --surface: #171b23; --fg: #e9ecf2; --fg2: #b3bac7; --muted: #828a99;
+    --line: #2a303b; --wash: #1f242e; --accent: #7aa2f7; --accent-soft: #1d2a45;
+    --block: #f07a72; --block-soft: #3a1d1c; --review: #e7b54d; --review-soft: #352a12;
+    --allow: #5cc78b; --allow-soft: #15301f; --hit: #4a4012; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1218; --surface: #171b23; --fg: #e9ecf2; --fg2: #b3bac7; --muted: #828a99;
+  --line: #2a303b; --wash: #1f242e; --accent: #7aa2f7; --accent-soft: #1d2a45;
+  --block: #f07a72; --block-soft: #3a1d1c; --review: #e7b54d; --review-soft: #352a12;
+  --allow: #5cc78b; --allow-soft: #15301f; --hit: #4a4012; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+.wrap { max-width: 980px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.prose { max-width: 680px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); letter-spacing: -0.02em; }
+h2 { font-size: 24px; margin-bottom: 10px; }
+h3 { font-size: 17px; margin-bottom: 6px; }
+p { margin: 0 0 12px; }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+.lede { font-size: 18px; color: var(--fg2); margin-top: 14px; }
+.small { font-size: 14px; color: var(--fg2); }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--wash); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+section { margin-top: 56px; display: grid; gap: 14px; }
+.stage-head { display: flex; gap: 14px; align-items: baseline; }
+.stage-no { font: 700 14px/1 var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 6px 8px; flex: none; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; min-width: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--fg2); font-size: 13px; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--body); letter-spacing: .04em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+.chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.chip.block { color: var(--block); background: var(--block-soft); }
+.chip.review { color: var(--review); background: var(--review-soft); }
+.chip.allow { color: var(--allow); background: var(--allow-soft); }
+.hit { background: var(--hit); border-radius: 3px; padding: 0 3px; }
+.diagram svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.diagram text { font-family: var(--body); }
+.bars { display: grid; gap: 8px; }
+.bar { display: grid; grid-template-columns: 170px 1fr 34px; gap: 10px; align-items: center; font-size: 14px; }
+.bar .track { height: 12px; background: var(--wash); border-radius: 3px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--accent); border-radius: 3px; }
+.bar .fill.weak { background: var(--muted); }
+.bar .v { font: 500 13px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .bar { grid-template-columns: 120px 1fr 30px; font-size: 13px; } }
+.pattern svg { display: block; width: 100%; height: 44px; }
+.pattern .name { font: 600 14px var(--display); margin-bottom: 2px; }
+.stat { font: 700 34px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 13px; color: var(--fg2); }
+.rule { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rule:last-child { border-bottom: 0; }
+ul.tight { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.note { border-left: 3px solid var(--review); background: var(--review-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; }
+footer { margin-top: 64px; font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="prose">
+    <div class="eyebrow">Junction 2026 · Hostinger challenge · Spot the swarm</div>
+    <h1>How we catch a swarm of fake signups</h1>
+    <p class="lede">Free plans attract bot networks that open hundreds of accounts for phishing, spam and abuse. One fake signup looks
+      like a real person. A swarm gives itself away in the details its accounts share and in when they arrive.
+      Hostinger closed its own free hosting brand, 000webhost, in 2024. This is the detector we built for that problem.</p>
+  </header>
+
+  <section>
+    <h2>The pipeline</h2>
+    <p class="prose small">Every signup goes through the same four steps. Each step adds a reason in plain language, so a verdict
+      always comes with the evidence behind it.</p>
+    <div class="panel scroll diagram" role="img" aria-label="Pipeline: a signup passes per-signup checks, is linked to other signups that share rare details, the group's timing is compared with chance, and a verdict of block, review or allow is given with reasons.">
+      <svg viewBox="0 0 900 190" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/>
+          </marker>
+        </defs>
+        <g style="fill: var(--surface); stroke: var(--line)">
+          <rect x="6" y="40" width="120" height="110" rx="8"/>
+          <rect x="166" y="40" width="160" height="110" rx="8"/>
+          <rect x="366" y="40" width="160" height="110" rx="8"/>
+          <rect x="566" y="40" width="160" height="110" rx="8"/>
+        </g>
+        <g style="stroke: var(--muted); stroke-width: 1.5" marker-end="url(#arr)">
+          <line x1="128" y1="95" x2="162" y2="95"/>
+          <line x1="328" y1="95" x2="362" y2="95"/>
+          <line x1="528" y1="95" x2="562" y2="95"/>
+          <line x1="728" y1="95" x2="770" y2="58"/>
+          <line x1="728" y1="95" x2="770" y2="95"/>
+          <line x1="728" y1="95" x2="770" y2="132"/>
+        </g>
+        <g style="fill: var(--fg)" font-size="14" font-weight="600">
+          <text x="66" y="88" text-anchor="middle">New signup</text>
+          <text x="246" y="72" text-anchor="middle">1 · Checks</text>
+          <text x="446" y="72" text-anchor="middle">2 · Link</text>
+          <text x="646" y="72" text-anchor="middle">3 · Timing</text>
+        </g>
+        <g style="fill: var(--fg2)" font-size="12">
+          <text x="66" y="108" text-anchor="middle">email, device,</text>
+          <text x="66" y="124" text-anchor="middle">browser, network</text>
+          <text x="246" y="96" text-anchor="middle">throwaway inbox, alias,</text>
+          <text x="246" y="112" text-anchor="middle">automation browser,</text>
+          <text x="246" y="128" text-anchor="middle">device reuse</text>
+          <text x="446" y="96" text-anchor="middle">group signups that share</text>
+          <text x="446" y="112" text-anchor="middle">rare details</text>
+          <text x="446" y="128" text-anchor="middle">(5 or more)</text>
+          <text x="646" y="96" text-anchor="middle">burst, timer, hourly,</text>
+          <text x="646" y="112" text-anchor="middle">nightly vs 4,000</text>
+          <text x="646" y="128" text-anchor="middle">random groups</text>
+        </g>
+        <g font-size="13" font-weight="700">
+          <rect x="776" y="44" width="116" height="28" rx="14" style="fill: var(--block-soft)"/>
+          <text x="834" y="63" text-anchor="middle" style="fill: var(--block)">BLOCK</text>
+          <rect x="776" y="81" width="116" height="28" rx="14" style="fill: var(--review-soft)"/>
+          <text x="834" y="100" text-anchor="middle" style="fill: var(--review)">REVIEW</text>
+          <rect x="776" y="118" width="116" height="28" rx="14" style="fill: var(--allow-soft)"/>
+          <text x="834" y="137" text-anchor="middle" style="fill: var(--allow)">ALLOW</text>
+        </g>
+        <text x="834" y="172" text-anchor="middle" font-size="12" style="fill: var(--muted)">always with reasons</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <div class="stage-head"><span class="stage-no">1</span><h2>Check each signup on its own</h2></div>
+    <p class="prose">Some signups give themselves away alone. Each check adds points and a sentence. At 60 points the signup is
+      blocked; at 35 it goes to review.</p>
+    <div class="panel scroll">
+      <table>
+        <tr><th>Check</th><th>What the reader sees</th><th class="num">Points</th></tr>
+        <tr><td>Throwaway inbox</td><td>“Email is from a throwaway inbox service (mailinator.com).”</td><td class="num">45</td></tr>
+        <tr><td>One inbox, many accounts</td><td>“12 accounts use spellings of one inbox; the provider ignores dots or +tags.” Gmail delivers
+          <code>j.o.h.n+free@gmail.com</code> and <code>john@gmail.com</code> to the same person.</td><td class="num">50</td></tr>
+        <tr><td>Automation browser</td><td>“The browser identifies itself as an automation tool.” (HeadlessChrome, python-requests…)</td><td class="num">50</td></tr>
+        <tr><td>One device, many accounts</td><td>“The same device created 15 accounts.” Applies at 5 or more, so a family sharing a laptop is not hit.</td><td class="num">35</td></tr>
+        <tr><td>Datacenter or VPN network</td><td>“Privacy-minded people do this too, so on its own it is weak.”</td><td class="num">10</td></tr>
+        <tr><td>Device check skipped</td><td>“The browser did not run the device check on the signup page.”</td><td class="num">10</td></tr>
+      </table>
+    </div>
+    <p class="prose small">A careful operator passes all of these, using real-looking addresses, a normal browser and residential
+      proxies. That is why step 2 exists.</p>
+  </section>
+
+  <section>
+    <div class="stage-head"><span class="stage-no">2</span><h2>Link signups that share rare details</h2></div>
+    <p class="prose">Two signups are linked when the details they share add up to a weight of 2 or more. Details that an operator
+      has to fake count most. Network details count least, because offices, schools and VPN users share them innocently.</p>
+    <div class="grid2">
+      <div class="panel">
+        <h3>Weight of each shared detail</h3>
+        <div class="bars" aria-label="Weights: device 3, real inbox 3, email pattern 1.2, browser build 1, IP address 1, organisation email domain 1, username pattern 0.8, address block 0.8, network 0.6">
+          <div class="bar"><span>Same device</span><span class="track"><span class="fill" style="width:100%; display:block"></span></span><span class="v">3.0</span></div>
+          <div class="bar"><span>Same real inbox</span><span class="track"><span class="fill" style="width:100%; display:block"></span></span><span class="v">3.0</span></div>
+          <div class="bar"><span>Email pattern</span><span class="track"><span class="fill" style="width:40%; display:block"></span></span><span class="v">1.2</span></div>
+          <div class="bar"><span>Exact browser build</span><span class="track"><span class="fill" style="width:33.3%; display:block"></span></span><span class="v">1.0</span></div>
+          <div class="bar"><span>Org email domain</span><span class="track"><span class="fill" style="width:33.3%; display:block"></span></span><span class="v">1.0</span></div>
+          <div class="bar"><span>IP address</span><span class="track"><span class="fill weak" style="width:33.3%; display:block"></span></span><span class="v">1.0</span></div>
+          <div class="bar"><span>Username pattern</span><span class="track"><span class="fill" style="width:26.7%; display:block"></span></span><span class="v">0.8</span></div>
+          <div class="bar"><span>Address block (/24)</span><span class="track"><span class="fill weak" style="width:26.7%; display:block"></span></span><span class="v">0.8</span></div>
+          <div class="bar"><span>Network (ASN)</span><span class="track"><span class="fill weak" style="width:20%; display:block"></span></span><span class="v">0.6</span></div>
+        </div>
+        <p class="small" style="margin-top:10px">Grey bars are network details. Link threshold: 2.0.</p>
+      </div>
+      <div class="panel">
+        <h3>The 3% rule</h3>
+        <p class="small">A detail shared by more than 3% of all signups is not evidence and is ignored: <code>gmail.com</code>, this month's Chrome
+          version, the country's biggest home-internet provider. Two strangers who both use Gmail on Chrome never link.</p>
+        <h3 style="margin-top:14px">Email and username patterns</h3>
+        <p class="small">Letters become <code>a</code>, digits become <code>9</code> with their count. So <code>marieesposito9124@outlook.com</code>
+          becomes <code>a9{4}@outlook.com</code>. A farm that generates names from a template shares one pattern. Real people mostly don't.</p>
+      </div>
+    </div>
+
+    <div class="panel scroll">
+      <h3>Worked example: the residential-proxy farm in our demo stream</h3>
+      <p class="small">Every IP address and every country is different, which defeats per-IP rate limits. The shared details are highlighted.</p>
+      <table>
+        <tr><th>Time (UTC)</th><th>Email</th><th>Network</th><th>Browser build</th><th>Device</th></tr>
+        <tr><td class="mono">11:00:11</td><td class="mono">marieesposito<span class="hit">9124@outlook.com</span></td><td>KDDI (JP)</td><td class="mono"><span class="hit">Chrome/124.0.6367.60</span></td><td class="mono"><span class="hit">2b3be02b…</span></td></tr>
+        <tr><td class="mono">11:03:49</td><td class="mono">gracewagner<span class="hit">6579@outlook.com</span></td><td>Cox (US)</td><td class="mono"><span class="hit">Chrome/124.0.6367.60</span></td><td class="mono">c46be2d1…</td></tr>
+        <tr><td class="mono">11:07:48</td><td class="mono">jonasvirtanen<span class="hit">3089@outlook.com</span></td><td>Orange Polska (PL)</td><td class="mono"><span class="hit">Chrome/124.0.6367.60</span></td><td class="mono">e2cd17c2…</td></tr>
+        <tr><td class="mono">11:11:42</td><td class="mono">leenabianchi<span class="hit">1308@outlook.com</span></td><td>Telecom Italia (IT)</td><td class="mono"><span class="hit">Chrome/124.0.6367.60</span></td><td class="mono">f8280abb…</td></tr>
+        <tr><td class="mono">11:15:56</td><td class="mono">ameliagarcia<span class="hit">5367@outlook.com</span></td><td>Vodafone Libertel (NL)</td><td class="mono"><span class="hit">Chrome/124.0.6367.60</span></td><td class="mono"><span class="hit">2b3be02b…</span></td></tr>
+        <tr><td colspan="5" class="small">… 55 more. 60 accounts, 4 devices, one stale browser build, one email pattern, one every ~4 minutes.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="stage-head"><span class="stage-no">3</span><h2>Ask whether the timing beats chance</h2></div>
+    <p class="prose">Shared details alone can be innocent. So each group's signup times are compared with 4,000 random groups of the
+      same size drawn from the same stream. A group only counts as synchronised if it beats the level that just 1 in 1,000
+      random groups reach. That keeps a busy evening from making everyone look coordinated.</p>
+    <div class="grid4">
+      <div class="panel pattern">
+        <div class="name">Burst</div>
+        <svg viewBox="0 0 200 44" aria-label="Many dots packed in a short window"><line x1="0" y1="22" x2="200" y2="22" style="stroke: var(--line)"/>
+          <g style="fill: var(--accent)"><circle cx="70" cy="22" r="4"/><circle cx="76" cy="22" r="4"/><circle cx="80" cy="22" r="4"/><circle cx="85" cy="22" r="4"/><circle cx="88" cy="22" r="4"/><circle cx="93" cy="22" r="4"/><circle cx="99" cy="22" r="4"/><circle cx="104" cy="22" r="4"/></g></svg>
+        <p class="small">45 accounts in 9 minutes.</p>
+      </div>
+      <div class="panel pattern">
+        <div class="name">Timer</div>
+        <svg viewBox="0 0 200 44" aria-label="Evenly spaced dots"><line x1="0" y1="22" x2="200" y2="22" style="stroke: var(--line)"/>
+          <g style="fill: var(--accent)"><circle cx="15" cy="22" r="4"/><circle cx="39" cy="22" r="4"/><circle cx="63" cy="22" r="4"/><circle cx="87" cy="22" r="4"/><circle cx="111" cy="22" r="4"/><circle cx="135" cy="22" r="4"/><circle cx="159" cy="22" r="4"/><circle cx="183" cy="22" r="4"/></g></svg>
+        <p class="small">One every ~4 minutes, for 4 hours.</p>
+      </div>
+      <div class="panel pattern">
+        <div class="name">Same minute of the hour</div>
+        <svg viewBox="0 0 200 44" aria-label="Dots at the same position in different hours"><g style="stroke: var(--line)"><line x1="0" y1="22" x2="200" y2="22"/><line x1="50" y1="12" x2="50" y2="32"/><line x1="100" y1="12" x2="100" y2="32"/><line x1="150" y1="12" x2="150" y2="32"/></g>
+          <g style="fill: var(--accent)"><circle cx="8" cy="22" r="4"/><circle cx="58" cy="22" r="4"/><circle cx="108" cy="22" r="4"/><circle cx="158" cy="22" r="4"/></g></svg>
+        <p class="small">Always at :10 past.</p>
+      </div>
+      <div class="panel pattern">
+        <div class="name">Same time every night</div>
+        <svg viewBox="0 0 200 44" aria-label="Clusters of dots at the same time on different days"><g style="stroke: var(--line)"><line x1="0" y1="22" x2="200" y2="22"/><line x1="40" y1="12" x2="40" y2="32"/><line x1="80" y1="12" x2="80" y2="32"/><line x1="120" y1="12" x2="120" y2="32"/><line x1="160" y1="12" x2="160" y2="32"/></g>
+          <g style="fill: var(--accent)"><circle cx="13" cy="22" r="3"/><circle cx="18" cy="22" r="3"/><circle cx="53" cy="22" r="3"/><circle cx="58" cy="22" r="3"/><circle cx="93" cy="22" r="3"/><circle cx="98" cy="22" r="3"/><circle cx="133" cy="22" r="3"/><circle cx="138" cy="22" r="3"/></g></svg>
+        <p class="small">3 accounts at 03:10 UTC, seven nights running.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="stage-head"><span class="stage-no">4</span><h2>Decide, and say why</h2></div>
+    <div class="panel">
+      <div class="rule"><span class="chip review">Review</span><div><b>Looks like an organisation.</b> Most of the group uses one school or company email domain,
+        with no shared devices or inboxes. A class of 28 students on one campus IP and one Chromebook build lands here. We never block it.</div></div>
+      <div class="rule"><span class="chip block">Block</span><div><b>Most accounts already fail step 1</b> (average risk 40 or more).</div></div>
+      <div class="rule"><span class="chip block">Block</span><div><b>Shared identity details and unusual timing:</b> a device, an inbox, an email pattern or an automation browser, with a timing score of 30 or more.</div></div>
+      <div class="rule"><span class="chip block">Block</span><div><b>Same network or browser build and strongly unusual timing</b> (50 or more). The nightly batch from one rented server lands here.</div></div>
+      <div class="rule"><span class="chip review">Review</span><div><b>Weaker combinations.</b> A person or a challenge page decides.</div></div>
+      <div class="rule"><span class="chip allow">Allow</span><div><b>Everything else.</b></div></div>
+    </div>
+    <p class="prose small">One more safeguard: inside a blocked group, an account is blocked only if it carries the group's evidence itself.
+      An ordinary person who happened to link in through a looser match goes to review instead. Before we added this rule, one real person
+      with the same email pattern as the nightly batch was blocked.</p>
+  </section>
+
+  <section>
+    <h2>How well it works</h2>
+    <p class="prose">We built a simulated signup stream with planted abuse, innocent look-alikes and an answer key. We designed against one
+      stream and measured on five different ones. Then we measured on five <b>hard</b> streams, where the attackers use tricks we did not
+      tune for: throwaway domains missing from our list, normal browsers, 20 devices instead of 4, and looser timing.</p>
+    <div class="grid4">
+      <div class="panel"><div class="stat">100%</div><div class="stat-label">of blocked accounts were abusive (750 of 750)</div></div>
+      <div class="panel"><div class="stat">0</div><div class="stat-label">of 16,864 real people blocked</div></div>
+      <div class="panel"><div class="stat">85.7%</div><div class="stat-label">of abusive accounts blocked (750 of 875). Hard streams: 73.7%</div></div>
+      <div class="panel"><div class="stat">1.5%</div><div class="stat-label">of real people sent to review (256), 200 of them the class and company traps</div></div>
+    </div>
+    <div class="panel scroll">
+      <table>
+        <tr><th>Group in the answer key (5 fresh streams)</th><th class="num">Signups</th><th class="num">Blocked</th><th class="num">Review</th><th>Result</th></tr>
+        <tr><td>Throwaway-inbox script on a cloud server</td><td class="num">225</td><td class="num">225</td><td class="num">0</td><td><span class="chip block">caught</span></td></tr>
+        <tr><td>Two Gmail inboxes behind 24 accounts</td><td class="num">120</td><td class="num">120</td><td class="num">0</td><td><span class="chip block">caught</span></td></tr>
+        <tr><td>Residential-proxy device farm</td><td class="num">300</td><td class="num">300</td><td class="num">0</td><td><span class="chip block">caught</span></td></tr>
+        <tr><td>Nightly batch from one rented server</td><td class="num">105</td><td class="num">105</td><td class="num">0</td><td><span class="chip block">caught</span> <span class="small">hard: review only</span></td></tr>
+        <tr><td>Operator who copies ordinary users in every field</td><td class="num">125</td><td class="num">0</td><td class="num">0</td><td><span class="chip review">missed</span></td></tr>
+        <tr><td>Class of students on one campus IP</td><td class="num">140</td><td class="num">0</td><td class="num">140</td><td><span class="chip allow">not blocked</span></td></tr>
+        <tr><td>Company team onboarding together</td><td class="num">60</td><td class="num">0</td><td class="num">60</td><td><span class="chip allow">not blocked</span></td></tr>
+        <tr><td>Newsletter rush, 150 people in 90 minutes</td><td class="num">750</td><td class="num">0</td><td class="num">1</td><td><span class="chip allow">not blocked</span></td></tr>
+        <tr><td>Families on one laptop</td><td class="num">464</td><td class="num">0</td><td class="num">3</td><td><span class="chip allow">not blocked</span></td></tr>
+        <tr><td>Privacy-VPN users</td><td class="num">450</td><td class="num">0</td><td class="num">2</td><td><span class="chip allow">not blocked</span></td></tr>
+        <tr><td>Ordinary signups</td><td class="num">15,000</td><td class="num">0</td><td class="num">50</td><td><span class="chip allow">not blocked</span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where it fails, and what is not real yet</h2>
+    <div class="grid2">
+      <div class="panel">
+        <h3>Misses</h3>
+        <ul class="tight small">
+          <li>An operator who varies every recorded detail and signs up at ordinary times looks like real people to us. We do not claim to catch them.</li>
+          <li>A nightly batch spread over several hours drops from block to review.</li>
+          <li>Classes and company teams cost a human a look. We chose that over blocking a school.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Limits</h3>
+        <ul class="tight small">
+          <li>All figures come from simulated signups that our own team wrote. They show the logic works as designed. They are not a measurement on a real platform.</li>
+          <li>The throwaway-email and hosting-network lists are small built-in snapshots. Production needs maintained lists and an IP-to-network database.</li>
+          <li>The live demo's device check is a simple hash of browser properties, and it has no IP-to-network lookup yet.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note small prose">Nothing here identifies who is behind an account. The tool flags patterns and explains them, so a person can act on them.</p>
+  </section>
+
+  <footer>Team Nuada-Ilmari · Junction 2026 · Detector code: <code>scripts/signup_guard.py</code>, accuracy runs: <code>scripts/eval_signups.py</code></footer>
+</div>
