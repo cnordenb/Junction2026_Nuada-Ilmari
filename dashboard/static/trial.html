@@ -166,8 +166,9 @@ function showCheck(d) {
   document.getElementById("verdict").textContent = VERDICT[d.action] || "";
   const parts = d.parts || [];
   document.getElementById("parts").innerHTML = parts.length
-    ? parts.map((p) => `<li><b>+${p.points}</b><span>${esc(p.reason)}</span></li>`).join("")
-    : `<li><b>0</b><span>No check failed: no shared device, inbox or pattern with other signups, and nothing bot-like in this signup.</span></li>`;
+    ? parts.map((p) => `<li><b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b><span><strong>${esc(p.label || "")}</strong> (${Number(p.x).toFixed(2)} × ${p.weight}). ${esc(p.reason)}</span></li>`).join("")
+      + `<li><b>−4.0</b><span>Starting point for everyone. Score = 100 / (1 + e<sup>−z</sup>), z = ${(-4 + parts.reduce((a, p) => a + p.contribution, 0)).toFixed(1)}</span></li>`
+    : `<li><b>−4.0</b><span>No factor above zero, so z = −4 and the score stays low. Factors: shared device, inbox, email pattern, form speed, hidden field, network and group timing.</span></li>`;
   const hist = d.history || [];
   if (hist.length) {
     const t0 = hist[0][0], t1 = Math.max(d.now || hist[hist.length - 1][0], t0 + 1);

@@ -18,12 +18,12 @@
     },
     "block_or_review": {
       "tp": 750,
-      "fp": 256,
+      "fp": 14,
       "fn": 125,
-      "tn": 16608,
-      "precision": 74.6,
+      "tn": 16850,
+      "precision": 98.2,
       "recall": 85.7,
-      "false_positive_rate": 1.52
+      "false_positive_rate": 0.08
     },
     "by_group": [
       {
@@ -32,7 +32,7 @@
         "signups": 120,
         "blocked": 120,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 98.8
       },
       {
         "group": "abuse_daily_drip",
@@ -40,7 +40,7 @@
         "signups": 105,
         "blocked": 105,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 89.9
       },
       {
         "group": "abuse_proxy_farm",
@@ -48,7 +48,7 @@
         "signups": 300,
         "blocked": 300,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 99.5
       },
       {
         "group": "abuse_slow_humanlike",
@@ -56,7 +56,7 @@
         "signups": 125,
         "blocked": 0,
         "review": 0,
-        "mean_score": 0.0
+        "mean_score": 2.1
       },
       {
         "group": "abuse_tempmail_burst",
@@ -71,52 +71,52 @@
         "abusive": false,
         "signups": 15000,
         "blocked": 0,
-        "review": 50,
-        "mean_score": 0.2
+        "review": 0,
+        "mean_score": 2.1
       },
       {
         "group": "trap_classroom",
         "abusive": false,
         "signups": 140,
         "blocked": 0,
-        "review": 140,
-        "mean_score": 40.0
+        "review": 0,
+        "mean_score": 24.9
       },
       {
         "group": "trap_family",
         "abusive": false,
         "signups": 464,
         "blocked": 0,
-        "review": 3,
-        "mean_score": 7.4
+        "review": 14,
+        "mean_score": 7.2
       },
       {
         "group": "trap_promo_burst",
         "abusive": false,
         "signups": 750,
         "blocked": 0,
-        "review": 1,
-        "mean_score": 0.1
+        "review": 0,
+        "mean_score": 2.2
       },
       {
         "group": "trap_team_onboarding",
         "abusive": false,
         "signups": 60,
         "blocked": 0,
-        "review": 60,
-        "mean_score": 40.0
+        "review": 0,
+        "mean_score": 14.9
       },
       {
         "group": "trap_vpn",
         "abusive": false,
         "signups": 450,
         "blocked": 0,
-        "review": 2,
-        "mean_score": 10.2
+        "review": 0,
+        "mean_score": 4.6
       }
     ],
     "score": {
-      "auc": 0.9236,
+      "auc": 0.9275,
       "bins": [
         0,
         10,
@@ -131,24 +131,24 @@
         100
       ],
       "bots": [
-        125,
+        124,
+        1,
         0,
         0,
         0,
         0,
         0,
         0,
-        0,
-        0,
-        750
+        42,
+        708
       ],
       "people": [
-        15971,
-        637,
-        0,
-        0,
-        200,
-        56,
+        16461,
+        223,
+        164,
+        3,
+        11,
+        2,
         0,
         0,
         0,
@@ -158,22 +158,22 @@
         {
           "cut": 30,
           "tp": 750,
-          "fp": 256,
+          "fp": 16,
           "fn": 125,
-          "tn": 16608,
-          "precision": 74.6,
+          "tn": 16848,
+          "precision": 97.9,
           "recall": 85.7,
-          "false_positive_rate": 1.52
+          "false_positive_rate": 0.09
         },
         {
           "cut": 50,
           "tp": 750,
-          "fp": 56,
+          "fp": 2,
           "fn": 125,
-          "tn": 16808,
-          "precision": 93.1,
+          "tn": 16862,
+          "precision": 99.7,
           "recall": 85.7,
-          "false_positive_rate": 0.33
+          "false_positive_rate": 0.01
         },
         {
           "cut": 70,
@@ -187,12 +187,12 @@
         },
         {
           "cut": 90,
-          "tp": 750,
+          "tp": 708,
           "fp": 0,
-          "fn": 125,
+          "fn": 167,
           "tn": 16864,
           "precision": 100.0,
-          "recall": 85.7,
+          "recall": 80.9,
           "false_positive_rate": 0.0
         }
       ],
@@ -209,22 +209,22 @@
       5
     ],
     "block": {
-      "tp": 645,
+      "tp": 750,
       "fp": 0,
-      "fn": 230,
+      "fn": 125,
       "tn": 16864,
       "precision": 100.0,
-      "recall": 73.7,
+      "recall": 85.7,
       "false_positive_rate": 0.0
     },
     "block_or_review": {
       "tp": 750,
-      "fp": 261,
+      "fp": 10,
       "fn": 125,
-      "tn": 16603,
-      "precision": 74.2,
+      "tn": 16854,
+      "precision": 98.7,
       "recall": 85.7,
-      "false_positive_rate": 1.55
+      "false_positive_rate": 0.06
     },
     "by_group": [
       {
@@ -233,15 +233,15 @@
         "signups": 120,
         "blocked": 120,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 98.6
       },
       {
         "group": "abuse_daily_drip",
         "abusive": true,
         "signups": 105,
-        "blocked": 0,
-        "review": 105,
-        "mean_score": 55.0
+        "blocked": 105,
+        "review": 0,
+        "mean_score": 66.8
       },
       {
         "group": "abuse_proxy_farm",
@@ -249,7 +249,7 @@
         "signups": 300,
         "blocked": 300,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 99.3
       },
       {
         "group": "abuse_slow_humanlike",
@@ -257,7 +257,7 @@
         "signups": 125,
         "blocked": 0,
         "review": 0,
-        "mean_score": 0.0
+        "mean_score": 2.0
       },
       {
         "group": "abuse_tempmail_burst",
@@ -265,59 +265,59 @@
         "signups": 225,
         "blocked": 225,
         "review": 0,
-        "mean_score": 90.0
+        "mean_score": 96.9
       },
       {
         "group": "background",
         "abusive": false,
         "signups": 15000,
         "blocked": 0,
-        "review": 50,
-        "mean_score": 0.2
+        "review": 0,
+        "mean_score": 2.1
       },
       {
         "group": "trap_classroom",
         "abusive": false,
         "signups": 140,
         "blocked": 0,
-        "review": 140,
-        "mean_score": 40.0
+        "review": 0,
+        "mean_score": 25.0
       },
       {
         "group": "trap_family",
         "abusive": false,
         "signups": 464,
         "blocked": 0,
-        "review": 5,
-        "mean_score": 7.6
+        "review": 10,
+        "mean_score": 7.0
       },
       {
         "group": "trap_promo_burst",
         "abusive": false,
         "signups": 750,
         "blocked": 0,
-        "review": 3,
-        "mean_score": 0.2
+        "review": 0,
+        "mean_score": 2.2
       },
       {
         "group": "trap_team_onboarding",
         "abusive": false,
         "signups": 60,
         "blocked": 0,
-        "review": 60,
-        "mean_score": 40.0
+        "review": 0,
+        "mean_score": 15.1
       },
       {
         "group": "trap_vpn",
         "abusive": false,
         "signups": 450,
         "blocked": 0,
-        "review": 3,
-        "mean_score": 10.3
+        "review": 0,
+        "mean_score": 4.6
       }
     ],
     "score": {
-      "auc": 0.9234,
+      "auc": 0.9221,
       "bins": [
         0,
         10,
@@ -337,19 +337,19 @@
         0,
         0,
         0,
-        105,
         0,
+        105,
         0,
         0,
         645
       ],
       "people": [
-        15967,
-        636,
-        0,
-        0,
-        200,
-        61,
+        16513,
+        175,
+        164,
+        2,
+        8,
+        2,
         0,
         0,
         0,
@@ -359,22 +359,22 @@
         {
           "cut": 30,
           "tp": 750,
-          "fp": 261,
+          "fp": 12,
           "fn": 125,
-          "tn": 16603,
-          "precision": 74.2,
+          "tn": 16852,
+          "precision": 98.4,
           "recall": 85.7,
-          "false_positive_rate": 1.55
+          "false_positive_rate": 0.07
         },
         {
           "cut": 50,
           "tp": 750,
-          "fp": 61,
+          "fp": 2,
           "fn": 125,
-          "tn": 16803,
-          "precision": 92.5,
+          "tn": 16862,
+          "precision": 99.7,
           "recall": 85.7,
-          "false_positive_rate": 0.36
+          "false_positive_rate": 0.01
         },
         {
           "cut": 70,

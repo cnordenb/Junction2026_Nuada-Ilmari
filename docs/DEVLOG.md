@@ -100,3 +100,10 @@
 - Dashboard: the score formula replaces the simulated-customer tile.
 - Deployed: https://trial.179-67-199-198.sslip.io, https://guard.179-67-199-198.sslip.io, https://attack.179-67-199-198.sslip.io (Caddy now also serves `attack.`). Live check: naive-bot 12 of 12 blocked at score 100, no simulated users; reset to 0 afterwards. Tests: 62 passing.
 - Note: if botswarm.site starts resolving, an `attack` A record is also needed.
+
+**18:37:01** Replaced the step-like score with a graded equation (request: more visual decision logic, not just 0 or 90/100).
+- bot score = 100 / (1 + e^-z), z = -4 + sum(weight x factor), 13 factors each measured 0 to 1: throwaway inbox 3.0, same inbox 3.5, automation 4.0, hidden field 5.0, fast fill 2.0, device reuse 3.0, device check missing 1.0, datacenter/VPN 0.8, machine-made name 0.8, group size 1.5, matches group's shared details 2.0, group timing 2.5, school/company group -3.0. Weights set by hand, not fitted. Action from the score: 60+ block, 35-59 review.
+- Group factors are scaled by how well each signup matches the group's evidence (device, inbox, throwaway, automation weigh 1.0; browser 0.6; IP 0.5; email pattern, /24, ASN 0.4). Without this, 31 ordinary people sharing a common email shape were blocked with the nightly batch.
+- Forged logs: standard 0 of 16,864 people blocked, 85.7% of bots blocked, 0.08% of people sent to review; hard logs 0 blocked, 85.7% of bots blocked (was 73.7%). AUC 0.93. Classroom and company teams are now allowed (mean scores 25 and 15) instead of sent to review.
+- Dashboard shows the equation and weights (from the model, not typed into the page) and each person's factor contributions; the phone shows factor x weight = contribution and z.
+- Not done (Tom asked to skip, to save credits): unit tests not rerun (the old test expecting classes and companies in review will now fail) and not deployed. Deploy: rsync to /opt/botswarm, then docker compose up -d --build.

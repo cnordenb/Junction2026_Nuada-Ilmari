@@ -37,6 +37,10 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 @media (min-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr 2.3fr 1.3fr; } .tiles .formula { grid-column: auto; } }
 @media (max-width: 760px) { .tiles .formula { grid-column: auto; } .formula .cols { grid-template-columns: 1fr; } }
 .formula .eq { font: 600 16px var(--mono); margin-bottom: 8px; }
+.ftable { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; font-size: 13px; color: var(--fg2); }
+.ftable div { display: flex; justify-content: space-between; gap: 8px; }
+.ftable b { font-family: var(--mono); color: var(--fg); }
+.ftable .g { color: var(--accent); }
 .formula .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
 .formula .cols b { color: var(--fg); font-family: var(--mono); }
 .formula .sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
@@ -108,14 +112,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     <div class="panel tile visitor"><div class="big" id="visBig">0</div><div class="label">real visitors on the trial page</div>
       <div class="split" id="visSplit"></div></div>
     <div class="panel formula"><h2>How the bot score is made</h2>
-      <div class="eq">score = max( <b>signup checks</b>, <b>group verdict</b> )</div>
-      <div class="cols"><div><div class="sub">signup checks (added up)</div>
-        <div>throwaway inbox <b>+45</b></div><div>same inbox, other spelling <b>+50</b></div><div>automation browser <b>+50</b></div>
-        <div>hidden field filled <b>+60</b></div><div>form filled under 1.5 s <b>+30</b></div><div>device behind 5+ accounts <b>+35</b></div>
-        <div>device behind 2–4 accounts <b>+5 each</b></div><div>datacenter / VPN <b>+10</b></div><div>no device check <b>+10</b></div></div>
-        <div><div class="sub">group verdict (linked signups)</div>
-        <div>swarm blocked <b>90</b></div><div>swarm to review <b>55</b></div><div>school / company <b>40</b></div>
-        <div class="sub" style="margin-top:8px">action</div><div><span class="a">0–34 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></div></div></div></div>
+      <div class="eq">score = 100 / (1 + e<sup>−z</sup>)&nbsp;&nbsp; z = <span id="bias">−4</span> + Σ weight × factor</div>
+      <div class="ftable" id="ftable"></div>
+      <div class="sub" style="margin-top:6px">each factor is measured from 0 to 1 · <span class="a">under 35 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></div></div>
     <div class="panel qr"><div id="qr" aria-label="QR code to the trial page"></div>
       <div><h2 style="margin-bottom:4px">Try to get past it</h2><div class="url" id="trialUrl"></div>
         <div class="meta" style="margin-top:6px">Sign up from your own phone. Then try to farm accounts.</div></div></div>
@@ -240,11 +239,16 @@ function render(s) {
       <div><div class="tk">${esc(r.ticket || "")}</div><div class="t meta">${clock(r.time)}</div></div>
       <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}</div>
       <div class="sc"><div class="num" style="color:${col}">${r.score ?? "–"}</div><div class="bar"><i style="width:${r.score || 0}%; background:${col}"></i></div></div>
-      ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>+${p.points}</b> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No check failed.</div>`}</div>`;
+      ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b> ${esc(p.label || "")} <span class="meta">(${Number(p.x).toFixed(2)} × ${p.weight})</span> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No factor above zero: z = −4, score ${r.score}.</div>`}</div>`;
   }).join("") : `<p class="empty">Waiting for the first signup…</p>`;
   s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
   drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
   renderTested(s.tested);
+  if (s.model && !$("ftable").dataset.done) {
+    $("bias").textContent = String(s.model.bias).replace("-", "−");
+    $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${i >= 9 ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");
+    $("ftable").dataset.done = "1";
+  }
 }
 
 async function poll() {

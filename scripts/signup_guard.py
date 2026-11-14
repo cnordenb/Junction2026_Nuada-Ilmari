@@ -263,6 +263,104 @@ def signup_signals(frame: pd.DataFrame) -> list[list[dict]]:
     return out
 
 
+# ---------------------------------------------------------------- bot score model
+# bot score = 100 / (1 + e^-z),   z = BIAS + sum(weight_k * x_k)
+# Every x_k is measured between 0 and 1, so the score moves gradually: a
+# second account on one phone nudges it, a fifth pushes it hard. Weights are
+# set by hand from what each factor means (not fitted), then checked on the
+# forged logs (scripts/eval_signups.py). It is a ranking score with stated
+# rules, not a calibrated probability.
+BIAS = -4.0
+FACTORS = [
+    # key, label, weight, how x is measured
+    ("throwaway", "Throwaway inbox", 3.0, "1 if the email domain is a throwaway inbox service"),
+    ("same_inbox", "Same inbox, other spelling", 3.5, "(accounts on one real inbox - 1) / 3, capped at 1"),
+    ("automation", "Automation browser", 4.0, "1 if the browser says it is an automation tool or remote-controlled"),
+    ("hidden_field", "Hidden field filled", 5.0, "1 if the invisible form field was filled in"),
+    ("fast_fill", "Form filled too fast", 2.0, "(3 s - time to fill) / 3 s, between 0 and 1"),
+    ("device_reuse", "Device reused", 3.0, "(accounts from this device - 1) / 4, capped at 1"),
+    ("no_device_check", "Device check missing", 1.0, "1 if the page's device check never ran"),
+    ("datacenter", "Datacenter / VPN network", 0.8, "1 if the network is a cloud, hosting or VPN provider"),
+    ("machine_name", "Machine-made name", 0.8, "(digits at the end of the email name - 1) / 4, capped at 1"),
+    ("swarm_size", "Size of linked group", 1.5, "(signups in the linked group - 4) / 10, capped at 1, times how well this signup matches the group"),
+    ("shared_identity", "Matches the group's shared details", 2.0, "weighted share of the group's shared details this signup has (device, inbox, throwaway, automation count most; email pattern, IP, network less)"),
+    ("timing", "Group timing beats chance", 2.5, "group synchrony score / 100 (burst, timer, same minute, same time of day), times how well this signup matches the group"),
+    ("organisation", "School or company group", -3.0, "1 if the group looks like one organisation signing up together"),
+]
+FACTOR_KEYS = [f[0] for f in FACTORS]
+WEIGHTS = np.array([f[2] for f in FACTORS])
+SCORE_BLOCK, SCORE_REVIEW = 60, 35
+# How strongly each kind of shared detail ties one signup to its group.
+EVIDENCE_WEIGHT = {"inbox": 1.0, "device": 1.0, "disposable": 1.0, "ua": 0.6, "etemplate": 0.4,
+                   "ip": 0.5, "net": 0.4, "asn": 0.4}
+
+
+def model_description() -> dict:
+    return {"bias": BIAS, "block": SCORE_BLOCK, "review": SCORE_REVIEW,
+            "factors": [{"key": k, "label": l, "weight": w, "measure": m} for k, l, w, m in FACTORS]}
+
+
+def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
+    """Per-signup factors (the first nine). Returns x (n x 13, group columns
+    left at 0) and, per signup, a reason for every factor above 0."""
+    n = len(frame)
+    x = np.zeros((n, len(FACTORS)))
+    col = {k: i for i, k in enumerate(FACTOR_KEYS)}
+    why: list[dict] = [{} for _ in range(n)]
+    throwaway = disposable_domains()
+    inbox = frame["email"].map(canonical_inbox)
+    spellings = frame.groupby(inbox)["email"].transform(lambda s: s.str.lower().nunique())
+    per_inbox = inbox.map(inbox.value_counts())
+    device_counts = frame["device_id"].map(frame["device_id"].value_counts())
+    has_fp_column = (frame["device_id"] != "").mean() >= 0.5
+    for i, row in enumerate(frame.to_dict("records")):
+        local, domain = split_email(row["email"])
+
+        def put(key, value, reason):
+            if value > 0:
+                x[i, col[key]] = min(1.0, value)
+                why[i][key] = reason
+
+        if domain in throwaway:
+            put("throwaway", 1, f"Email is from a throwaway inbox service ({domain}).")
+        if per_inbox.iat[i] > 1 and spellings.iat[i] > 1:
+            put("same_inbox", (per_inbox.iat[i] - 1) / 3,
+                f"{per_inbox.iat[i]} accounts use spellings of one inbox ({inbox.iat[i]}); the provider ignores dots or +tags.")
+        if (row["user_agent"] and is_automation(row["user_agent"])) or str(row.get("webdriver", "")) in {"1", "true", "True"}:
+            put("automation", 1, "The browser identifies itself as an automation tool or reports it is remote-controlled.")
+        if str(row.get("honeypot", "")) in {"1", "true", "True"}:
+            put("hidden_field", 1, "Filled in a hidden form field that people never see.")
+        fill = str(row.get("fill_ms", "")).strip()
+        if fill:
+            try:
+                fill_s = float(fill) / 1000
+                put("fast_fill", (3.0 - fill_s) / 3.0, f"The form was filled in {fill_s:.1f} s; people usually take more than 3 s.")
+            except ValueError:
+                pass
+        if row["device_id"] and device_counts.iat[i] >= 2:
+            put("device_reuse", (device_counts.iat[i] - 1) / 4,
+                f"This device has created {device_counts.iat[i]} accounts" +
+                (". Families share devices, so a few is normal." if device_counts.iat[i] < DEFAULT_MIN_SIZE else "."))
+        if has_fp_column and not row["device_id"]:
+            put("no_device_check", 1, "The browser did not run the device check on the signup page.")
+        try:
+            asn = int(float(row["asn"])) if row["asn"] else None
+        except ValueError:
+            asn = None
+        if asn in HOSTING_ASNS:
+            put("datacenter", 1, f"Signed up from a datacenter or VPN network ({HOSTING_ASNS[asn]}). VPN users do this too.")
+        digits = re.search(r"(\d+)$", local.split("+", 1)[0])
+        if digits and len(digits.group(1)) >= 2:
+            d = len(digits.group(1))
+            put("machine_name", (d - 1) / 4, f"The email name ends in {d} digits, common in generated accounts.")
+    return x, why
+
+
+def score_from(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    z = BIAS + x @ WEIGHTS
+    return z, 100.0 / (1.0 + np.exp(-z))
+
+
 # ---------------------------------------------------------------- linking
 
 def link_matrix(frame: pd.DataFrame) -> tuple[sparse.csr_matrix, dict]:
@@ -430,6 +528,8 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
     reason_src = ["signup checks" if a != "allow" else "" for a in action]
     group_points = np.zeros(n)
     group_reason = [""] * n
+    fx, fwhy = signup_factors(frame)
+    fcol = {k: i for i, k in enumerate(FACTOR_KEYS)}
 
     x, link_info = link_matrix(frame)
     sim = (x @ x.T).tocsr()
@@ -455,7 +555,28 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         # those: sharing only the network or browser with a farm is not enough.
         need = min(2, len(verdict["evidence"]))
         identity_ev = [e for e in verdict["evidence"] if e["kind"] == "identity"]
+        size_x = min(1.0, max(0.0, (len(idx) - 4) / 10))
+        timing_x = float(sync["sync"]) / 100
+        shared_txt = "; ".join(e["text"].rstrip(".") for e in verdict["evidence"][:2]) or "a few shared details"
+        ev_w = [EVIDENCE_WEIGHT.get(e["key"], 0.5) for e in verdict["evidence"] if e["kind"] != "organisation"]
+        ev_all = [e for e in verdict["evidence"] if e["kind"] != "organisation"]
         for i in idx:
+            row_i = frame.iloc[i]
+            # How much of the group's case applies to this signup: shared
+            # device or inbox count fully, a shared email shape only a little.
+            carry = (sum(w for e, w in zip(ev_all, ev_w) if e["match"](row_i)) / sum(ev_w)) if ev_w else 0.0
+            if size_x * carry > 0:
+                fx[i, fcol["swarm_size"]] = size_x * carry
+                fwhy[i]["swarm_size"] = f"Linked to {len(idx) - 1} other signups ({shared_txt})."
+            if carry:
+                fx[i, fcol["shared_identity"]] = carry
+                fwhy[i]["shared_identity"] = f"Has {carry:.0%} of what the group shares (weighted)."
+            if timing_x * carry > 0:
+                fx[i, fcol["timing"]] = timing_x * carry
+                fwhy[i]["timing"] = _timing_text(sync)
+            if verdict["organisation"]:
+                fx[i, fcol["organisation"]] = 1.0
+                fwhy[i]["organisation"] = "The group looks like one school or company signing up together."
             mine = verdict["action"]
             if mine == "block":
                 row = frame.iloc[i]
@@ -482,8 +603,15 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
             "signups": [_row(frame, i, risk, signals) for i in order[:sample]],
             "_idx": idx,
         })
+    # The score decides the action: one equation for every signup.
+    zval, score = score_from(fx)
+    action = np.where(score >= SCORE_BLOCK, "block", np.where(score >= SCORE_REVIEW, "review", "allow")).astype(object)
+    for c in clusters:
+        members = c["_idx"]
+        c["rule_action"] = c["action"]
+        c["action"] = action[members[np.argsort(score[members])[len(members) // 2]]]   # the median member's action
+        c["median_score"] = int(round(float(np.median(score[members]))))
     clusters.sort(key=lambda c: (-ACTION_RANK[c["action"]], -c["size"]))
-    score = np.minimum(100, np.maximum(risk, group_points))
 
     report = {
         "dataset": {"rows_read": su.rows_read, "signups": n, "columns_used": su.columns_used,
@@ -506,11 +634,15 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         report["risk"] = risk.astype(int).tolist()
         report["reasons"] = [[s["reason"] for s in sig] for sig in signals]
         report["cluster_of"] = cluster_of.tolist()
-        report["score"] = score.astype(int).tolist()
+        report["score"] = np.round(score).astype(int).tolist()
+        report["z"] = np.round(zval, 2).tolist()
         report["score_parts"] = [
-            ([{"points": int(group_points[i]), "reason": group_reason[i], "kind": "group"}] if group_points[i] else [])
-            + [{"points": s["points"], "reason": s["reason"], "kind": "signal"} for s in signals[i]]
+            sorted(({"key": k, "label": FACTORS[j][1], "x": round(float(fx[i, j]), 2), "weight": FACTORS[j][2],
+                     "contribution": round(float(fx[i, j] * FACTORS[j][2]), 2), "reason": fwhy[i].get(k, ""),
+                     "kind": "group" if j >= 9 else "signup", "points": round(float(fx[i, j] * FACTORS[j][2]), 2)}
+                    for j, k in enumerate(FACTOR_KEYS) if fx[i, j] > 0), key=lambda d: -abs(d["contribution"]))
             for i in range(n)]
+        report["model"] = model_description()
     return report
 
 

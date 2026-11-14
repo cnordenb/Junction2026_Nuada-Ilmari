@@ -342,7 +342,7 @@ def guard_state(since_version: int = -1) -> dict:
         "version": version, "now": now, "uptime": now - _state["started"],
         "history_rows": len(HISTORY), "live_rows": len(rows), "recent_30min": len(recent),
         "scoreboard": scoreboard, "campaigns": campaigns, "timeline": timeline, "groups": groups[:6],
-        "score_hist": score_hist, "score_bins": bins, "tested": _evaluation_summary(),
+        "score_hist": score_hist, "score_bins": bins, "tested": _evaluation_summary(), "model": report.get("model"),
         "feed": [{"id": r["id"], "time": r["created_at"], "email": _mask(r["email"]), "source": r["source"],
                   "campaign": r["campaign"], "action": r["action_now"], "at_signup": r["action_at_signup"],
                   "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3],
