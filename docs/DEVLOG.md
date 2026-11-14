@@ -136,3 +136,9 @@
 - Hashing: device ID is a SHA-256 hash; emails and IPs are stored in plain text on the VPS (not changed).
 
 **21:14:06** Domain is **botswarm.tech** (not botswarm.site). https://botswarm.tech and www now serve the Neighbr signup (`NEIGHBR_HOSTS`); guard.botswarm.tech and attack.botswarm.tech are added to Caddy automatically once their A records resolve. Caddy now takes a host list (`SITE_HOSTS`), so the sslip.io addresses stay up as a backup. Pages link to each other by domain (bare domain for Neighbr, trial. on sslip.io).
+
+**21:45:01** AI factor: Liquid AI **d1-omni-600M** decision model (GGUF Q8_0) runs on the VPS in llama.cpp's server (`ghcr.io/ggml-org/llama.cpp:server`, service `llm`, internal only), answering typed questions in one pass with calibrated probabilities via `/v1/systemone` (no generated text). About 0.3 s per signup on 2 vCPU.
+- Probed questions on known real and bot signups. "Is this signup fake?" separated poorly (a mailinator bot scored 0.26, below a real person at 0.30); "throwaway domain?" was useless (our list covers it). Kept two: P(email looks machine-made) and P(horse name is a username, full name or spam). Bots 0.86-1.00 on at least one; real people mostly under 0.3 (one real email scored 0.63).
+- Factor 18, "AI model (d1): looks machine-made", weight +1.5: max of the two, counted above 0.5 and rescaled to 0-1. Asked once at signup and stored, so re-judging stays fast; fail-open (2.5 s timeout, factor left out if the model is down). Data stays on the server. On its own it cannot block (verified live: a spam horse name scored 9, allowed).
+- Model licence: LFM Open License v1.0 (lfm1.0); fine for a hackathon demo, check before any commercial use.
+- Not done: d1 is not part of the forged-log evaluation (the logs were scored without it).

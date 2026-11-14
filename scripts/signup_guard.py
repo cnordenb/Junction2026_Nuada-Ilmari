@@ -286,6 +286,7 @@ FACTORS = [
     ("no_human_input", "No mouse, touch or typing", 1.5, "1 if the page ran but saw no mouse movement, touch or key press"),
     ("robotic_motion", "Robotic movement or typing", 2.0, "straight-line, constant-speed pointer paths, or perfectly even typing (0 to 1)"),
     ("human_motion", "Natural movement and typing", -1.5, "wobbly, paused pointer or touch movement and irregular typing (0 to 1)"),
+    ("d1_model", "AI model (d1): looks machine-made", 1.5, "Liquid AI d1-omni-600M: the larger of P(email looks machine-made) and P(horse name is a username, full name or spam), counted above 0.5 and rescaled to 0-1"),
     ("near_server", "Latency too low for a person", 0.5, "1 if the page's background ping took under 4 ms (a machine next to our server)"),
     ("swarm_size", "Size of linked group", 1.5, "(signups in the linked group - 4) / 10, capped at 1, times how well this signup matches the group"),
     ("shared_identity", "Matches the group's shared details", 2.0, "weighted share of the group's shared details this signup has (device, inbox, throwaway, automation count most; email pattern, IP, network less)"),
@@ -307,6 +308,22 @@ def model_description() -> dict:
     return {"bias": BIAS, "block": SCORE_BLOCK, "review": SCORE_REVIEW,
             "factors": [{"key": k, "label": l, "weight": w, "measure": m, "group": k in GROUP_KEYS}
                         for k, l, w, m in FACTORS]}
+
+
+def d1_factor(raw: str) -> tuple[float, str] | None:
+    """The d1 decision model's answers, stored at signup time."""
+    try:
+        d = json.loads(raw) if raw else None
+    except ValueError:
+        return None
+    if not isinstance(d, dict):
+        return None
+    email_p, name_p = float(d.get("email_machine", 0) or 0), float(d.get("name_not_pet", 0) or 0)
+    x = max(0.0, (max(email_p, name_p) - 0.5) / 0.5)
+    if x <= 0:
+        return None
+    which = "the email looks machine-made" if email_p >= name_p else "the horse name looks like a username, a full name or spam"
+    return x, f"The d1 AI model judged that {which} (P = {max(email_p, name_p):.2f})."
 
 
 def behaviour_factors(raw: str) -> dict[str, tuple[float, str]]:
@@ -399,6 +416,9 @@ def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
             put("machine_name", (d - 1) / 4, f"The email name ends in {d} digits, common in generated accounts.")
         for key, (val, reason) in behaviour_factors(str(row.get("behaviour", "") or "")).items():
             put(key, val, reason)
+        d1 = d1_factor(str(row.get("d1", "") or ""))
+        if d1:
+            put("d1_model", d1[0], d1[1])
     return x, why
 
 

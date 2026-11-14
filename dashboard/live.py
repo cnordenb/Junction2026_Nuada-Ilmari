@@ -48,7 +48,7 @@ SHOW_SCORE = os.environ.get("GUARD_SHOW_SCORE", "1") == "1"
 WINDOW_DAYS = 7
 MAX_LIVE_ROWS = 20000
 FIELDS = ["id", "created_at", "email", "username", "ip", "asn", "asn_org", "user_agent", "device_id",
-          "fill_ms", "honeypot", "webdriver", "behaviour"]
+          "fill_ms", "honeypot", "webdriver", "behaviour", "d1"]
 
 router = APIRouter()
 _lock = threading.RLock()
@@ -72,7 +72,7 @@ def _db() -> sqlite3.Connection:
     have = {r[1] for r in con.execute("PRAGMA table_info(signups)")}
     for col, kind in (("score", "INTEGER"), ("score_at_signup", "INTEGER"), ("parts", "TEXT"),
                       ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT"),
-                      ("behaviour", "TEXT")):
+                      ("behaviour", "TEXT"), ("d1", "TEXT")):
         if col not in have:
             con.execute(f"ALTER TABLE signups ADD COLUMN {col} {kind}")
     con.execute("""CREATE TABLE IF NOT EXISTS bans (
@@ -91,7 +91,7 @@ def _history() -> pd.DataFrame:
     su = load_signups(demo, label_col="label")
     frame = su.frame[[lab == "organic" for lab in su.labels]].reset_index(drop=True)
     frame["time"] = frame["time"] + (_state["started"] - 120 - float(frame["time"].max()))
-    for col in ("fill_ms", "honeypot", "webdriver", "behaviour"):
+    for col in ("fill_ms", "honeypot", "webdriver", "behaviour", "d1"):
         frame[col] = ""
     return frame
 
@@ -117,8 +117,8 @@ def judge(row: dict, source: str, campaign: str = "") -> dict:
     ticket, token = _ticket(), secrets.token_hex(16)
     with _lock:
         _con.execute("INSERT INTO signups (id, created_at, email, username, ip, asn, asn_org, user_agent, device_id, "
-                     "fill_ms, honeypot, webdriver, behaviour, source, campaign, ticket, token, history) "
-                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     "fill_ms, honeypot, webdriver, behaviour, d1, source, campaign, ticket, token, history) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      [row[f] for f in FIELDS] + [source, campaign, ticket, token, "[]"])
         _rejudge()
         _update_bans()
@@ -181,7 +181,7 @@ def _simulated_customers() -> None:
             row = {"id": f"s-{secrets.token_hex(5)}", "created_at": time.time(), "email": person["email"],
                    "username": person["username"], "ip": person["ip"], "asn": str(person["asn"]),
                    "asn_org": person["asn_org"], "user_agent": person["user_agent"], "device_id": person["device_id"],
-                   "fill_ms": str(int(rng.uniform(6000, 45000))), "honeypot": "", "webdriver": "", "behaviour": ""}
+                   "fill_ms": str(int(rng.uniform(6000, 45000))), "honeypot": "", "webdriver": "", "behaviour": "", "d1": ""}
             judge(row, "simulated")
         except Exception as exc:  # never let the simulator kill the server
             print(f"simulated customer failed: {exc}")
@@ -289,6 +289,7 @@ def trial_signup(item: TrialSignup, request: Request) -> dict:
            "fill_ms": "" if item.fill_ms is None else str(item.fill_ms),
            "honeypot": "1" if item.website.strip() else "", "webdriver": "1" if item.webdriver else "",
            "behaviour": _clean_behaviour(item.behaviour)}
+    row["d1"] = ask_d1(row["email"], row["username"])
     with _lock:
         if _con.execute("SELECT COUNT(*) FROM signups").fetchone()[0] >= MAX_LIVE_ROWS:
             _con.execute("DELETE FROM signups WHERE id IN (SELECT id FROM signups ORDER BY created_at LIMIT 1000)")
@@ -627,3 +628,32 @@ def ban_reset(item: BanReset) -> dict:
 def ping() -> dict:
     """Tiny endpoint the signup page calls in the background to measure latency."""
     return {"t": time.time()}
+
+
+# ---------------------------------------------------------------- d1 decision model
+# Liquid AI's d1-omni-600M runs next to the app in llama.cpp's server
+# (deploy/docker-compose.yml, service "llm"). It answers yes/no questions as
+# calibrated probabilities in one pass, with no generated text. Asked once per
+# signup and stored; if it is slow or down, the factor is simply left out.
+D1_URL = os.environ.get("D1_URL", "")
+D1_TIMEOUT = float(os.environ.get("D1_TIMEOUT", "2.5"))
+D1_QUESTIONS = {
+    "email_machine": {"type": "noul", "instructions": "Does the part of the email before the @ look randomly generated or "
+                      "machine-made (random letters, user plus digits, name plus 4 digits, dots or +tags to fake a new address)?"},
+    "name_not_pet": {"type": "noul", "instructions": "Is the horse name not a playful pet name, but a username, a person's "
+                     "full name, an ID or spam?"},
+}
+
+
+def ask_d1(email: str, horse_name: str) -> str:
+    if not D1_URL:
+        return ""
+    body = json.dumps({"state": {"email": email[:200], "horse_name": horse_name[:100]}, "questions": D1_QUESTIONS}).encode()
+    try:
+        req = urllib.request.Request(D1_URL.rstrip("/") + "/v1/systemone", data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=D1_TIMEOUT) as res:
+            answers = json.loads(res.read())["answers"]
+        return json.dumps({k: round(float(answers[k]["noul"]), 4) for k in D1_QUESTIONS})
+    except Exception as exc:  # fail open: never block a signup because the model is unavailable
+        print(f"d1 unavailable: {exc}")
+        return ""

@@ -9,10 +9,20 @@ services:
       GUARD_SIM_EVERY: ${GUARD_SIM_EVERY:-20}
       SIGNUP_TRUST_PROXY: "1"            # Caddy overwrites X-Forwarded-For, so it can be trusted
       NEIGHBR_HOSTS: ${NEIGHBR_HOSTS:-}   # hosts whose front page is the Neighbr signup
+      D1_URL: http://llm:8080             # Liquid AI d1-omni-600M decision model (service below)
     volumes:
       - guard-data:/var/guard
     expose:
       - "8000"
+  llm:
+    # llama.cpp server with Liquid AI's d1-omni-600M decision model (about 0.3 s per signup on 2 vCPU).
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command: ["-hf", "LiquidAI/d1-omni-600M-GGUF:Q8_0", "-b", "4096", "-ub", "4096", "--host", "0.0.0.0", "--port", "8080", "-t", "2"]
+    volumes:
+      - llama-cache:/root/.cache/llama.cpp
+    expose:
+      - "8080"
   caddy:
     image: caddy:2.10
     restart: unless-stopped
@@ -27,5 +37,6 @@ services:
     depends_on:
       - app
 volumes:
+  llama-cache:
   guard-data:
   caddy-data:
