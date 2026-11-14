@@ -323,7 +323,8 @@ async function pollMine() {
 }
 
 const host = location.hostname;
-if (host.startsWith("trial.")) document.getElementById("guardLink").href = location.protocol + "//guard." + host.slice(6);
+if (host.includes(".") && !/^[\d.]+$/.test(host) && host !== "localhost")
+  document.getElementById("guardLink").href = location.protocol + "//guard." + host.replace(/^(www|trial)\./, "");
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();

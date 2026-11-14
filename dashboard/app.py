@@ -380,11 +380,15 @@ def _start_live() -> None:
     live.start_background()
 
 
+# Hosts whose front page is the Neighbr signup (e.g. the bare domain and www).
+NEIGHBR_HOSTS = {h.strip().lower() for h in os.environ.get("NEIGHBR_HOSTS", "").split(",") if h.strip()}
+
+
 @app.middleware("http")
 async def _subdomains(request: Request, call_next):
     host = request.headers.get("host", "").split(":")[0].lower()
     if request.url.path == "/":
-        if host.startswith("trial."):
+        if host in NEIGHBR_HOSTS or host.startswith("trial."):
             return live.trial_page()
         if host.startswith("guard."):
             return live.guard_page()

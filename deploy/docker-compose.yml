@@ -8,6 +8,7 @@ services:
       GUARD_DEMO_KEY: ${GUARD_DEMO_KEY:?set GUARD_DEMO_KEY}
       GUARD_SIM_EVERY: ${GUARD_SIM_EVERY:-20}
       SIGNUP_TRUST_PROXY: "1"            # Caddy overwrites X-Forwarded-For, so it can be trusted
+      NEIGHBR_HOSTS: ${NEIGHBR_HOSTS:-}   # hosts whose front page is the Neighbr signup
     volumes:
       - guard-data:/var/guard
     expose:
@@ -16,7 +17,7 @@ services:
     image: caddy:2.10
     restart: unless-stopped
     environment:
-      DOMAIN: ${DOMAIN:?set DOMAIN}
+      SITE_HOSTS: ${SITE_HOSTS:?set SITE_HOSTS}
     ports:
       - "80:80"
       - "443:443"

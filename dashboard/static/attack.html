@@ -93,9 +93,11 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 const host = location.hostname;
+const siteBase = (h) => h.replace(/^(www|trial|guard|attack)\./, "");
+const neighbrUrl = (b) => `${location.protocol}//${b.includes("sslip.io") ? "trial." + b : b}`;
 if (host.startsWith("attack.")) {
-  const base = host.slice(7);
-  $("lnkTrial").href = `${location.protocol}//trial.${base}`; $("lnkGuard").href = `${location.protocol}//guard.${base}`;
+  const base = siteBase(host);
+  $("lnkTrial").href = neighbrUrl(base); $("lnkGuard").href = `${location.protocol}//guard.${base}`;
 }
 let key = "";
 try { key = sessionStorage.getItem("demoKey") || ""; } catch (e) {}

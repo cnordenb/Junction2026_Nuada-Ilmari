@@ -134,3 +134,5 @@
 - Decision: no country-based penalty (it would block real people for where they live). The defensible signal is a mismatch between browser timezone and IP location; it needs an IP-to-location database (a download, not done yet). Timezone is collected and stored for it.
 - Forged logs carry no behaviour data, so those results are unchanged (0 people blocked, 85.7% bots); the new factors are only exercised by live signups and the console.
 - Hashing: device ID is a SHA-256 hash; emails and IPs are stored in plain text on the VPS (not changed).
+
+**21:14:06** Domain is **botswarm.tech** (not botswarm.site). https://botswarm.tech and www now serve the Neighbr signup (`NEIGHBR_HOSTS`); guard.botswarm.tech and attack.botswarm.tech are added to Caddy automatically once their A records resolve. Caddy now takes a host list (`SITE_HOSTS`), so the sslip.io addresses stay up as a backup. Pages link to each other by domain (bare domain for Neighbr, trial. on sslip.io).
