@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sargas Live</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -37,6 +38,15 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 @media (min-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr 2.3fr 1.3fr; } .tiles .formula { grid-column: auto; } }
 @media (max-width: 760px) { .tiles .formula { grid-column: auto; } .formula .cols { grid-template-columns: 1fr; } }
 .formula .eq { font: 600 16px var(--mono); margin-bottom: 8px; }
+.mathpanel { perspective: 1400px; }
+.mathcard { background: linear-gradient(160deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px 14px;
+  transform: rotateX(4deg); transform-origin: 50% 100%; box-shadow: 0 22px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); }
+.mathcard .katex { font-size: 1.32em; color: var(--fg); }
+.mathcard .katex-display { margin: .3em 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.mathnote { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--fg2); margin-top: 6px; }
+.mathnote i { font-style: normal; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+#mathExample .katex { font-size: 1.12em; }
+@media (prefers-reduced-motion: reduce) { .mathcard { transform: none; } }
 .ftable { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; font-size: 13px; color: var(--fg2); }
 .ftable div { display: flex; justify-content: space-between; gap: 8px; }
 .ftable b { font-family: var(--mono); color: var(--fg); }
@@ -102,28 +112,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 .big2 { font: 700 30px var(--display); font-variant-numeric: tabular-nums; }
-
-/* ---- equation visual ---- */
-.decide { display: grid; gap: 14px; }
-.decide .head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-.who-pick { display: flex; gap: 6px; flex-wrap: wrap; }
-.who-pick button { font: 600 12px var(--mono); background: var(--panel2); color: var(--fg2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
-.who-pick button.sel { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-.eqn { font: 500 17px/1.9 var(--mono); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 6px; }
-.eqn .lhs { font: 700 22px var(--display); margin-right: 6px; }
-.eqn .op { color: var(--muted); }
-.term { display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel2); color: var(--muted); transition: all .35s; }
-.term .w { color: var(--fg2); }
-.term .x { font-size: 12px; }
-.term.g { border-style: dashed; }
-.term.neg .w { color: var(--allow); }
-.term.on { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
-.term.on .x { color: var(--accent); font-weight: 700; }
-.result-line { font: 700 18px var(--mono); }
-.viz { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
-@media (max-width: 1000px) { .viz { grid-template-columns: 1fr; } }
-.viz svg { display: block; width: 100%; height: auto; }
-.viz .cap { font-size: 12px; color: var(--muted); margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .person.new, .person.changed, .person .bar i { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .live i, .row.new { animation: none; } }
 </style>
@@ -149,18 +137,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         <div class="meta" style="margin-top:6px">Sign up from your own phone. Then try to farm accounts.</div></div></div>
   </div>
 
-  <div class="panel decide" id="decide">
-    <div class="head"><h2 style="margin:0">How Sargas decides, live</h2>
-      <div class="who-pick" id="whoPick"><span class="meta">pick a signup ↓</span></div></div>
-    <div class="eqn" id="eqn"></div>
-    <div class="result-line" id="eqResult">Waiting for the first signup…</div>
-    <div class="viz">
-      <div><svg id="waterfall" viewBox="0 0 640 300" role="img" aria-label="Each factor's contribution stacking from the starting point to z"></svg>
-        <div class="cap">Every signup starts at z = −4. Each factor adds weight × value (0 to 1). Dashed lines: review and block thresholds.</div></div>
-      <div><svg id="curve" viewBox="0 0 440 300" role="img" aria-label="Score curve with every live signup placed on it"></svg>
-        <div class="cap">score = 100 / (1 + e<sup>−z</sup>). Dots: live signups (red bot swarm, blue real visitors). A ranking score from stated rules, not a probability.</div></div>
-    </div>
-  </div>
+  <div class="panel mathpanel"><h2>The formula</h2>
+    <div class="mathcard"><div id="mathMain"><p class="empty">Loading the formula…</p></div>
+      <div id="mathExample"></div>
+      <div class="mathnote"><span><i style="background:#7aa2f7"></i>about this signup</span><span><i style="background:#f2b84b"></i>about its linked group</span>
+        <span><i style="background:#4fd08a"></i>lowers the score</span><span>every x is measured from 0 to 1</span>
+        <span><span class="a">under 35 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></span>
+        <span>weights set by hand; a ranking score, not a probability</span></div></div></div>
 
   <div class="panel" id="chart">
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px"><h2>Signups, last 20 minutes (30-second bins)</h2>
@@ -188,6 +171,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     Timing tests compare each group against two weeks of past signups (a simulated baseline that is never shown as users).</p>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
@@ -270,87 +254,43 @@ function renderBans(bans, after) {
     } catch (e) { btn.textContent = e.message; }
   });
 }
-
-// ---------------- equation visual ----------------
-let MODEL = null, selId = null, lastFeed = [];
-const Z_MIN = -6, Z_MAX = 10, ZR = Math.log(35 / 65), ZB = Math.log(60 / 40);   // z where the score is 35 and 60
-const fmt = (v) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
-function zOf(r) { return MODEL.bias + (r.parts || []).reduce((a, p) => a + (p.contribution || 0), 0); }
-function renderDecide(feed) {
-  if (!MODEL) return;
-  lastFeed = feed;
-  if (!feed.length) { $("eqn").innerHTML = eqnHtml(null); return; }
-  if (!selId || !feed.some((r) => r.id === selId)) selId = feed[0].id;
-  const pick = feed.slice(0, 10);
-  $("whoPick").innerHTML = pick.map((r) => `<button class="${r.id === selId ? "sel" : ""}" data-id="${esc(r.id)}">${esc(r.ticket || "?")} · ${r.score}</button>`).join("");
-  $("whoPick").querySelectorAll("button").forEach((b) => b.onclick = () => { selId = b.dataset.id; renderDecide(lastFeed); });
-  const r = feed.find((x) => x.id === selId);
-  const z = zOf(r);
-  $("eqn").innerHTML = eqnHtml(r);
-  const col = r.score >= 60 ? "var(--block)" : r.score >= 35 ? "var(--review)" : "var(--allow)";
-  $("eqResult").innerHTML = `Ticket <span style="color:var(--accent)">${esc(r.ticket || "")}</span> (${esc(r.email)}): z = ${z.toFixed(2)} → score <span style="color:${col}">${r.score}</span> → <span class="chip ${esc(r.action)}">${esc(r.action)}</span>`;
-  drawWaterfall(r, z);
-  drawCurve(feed, r);
+const SHORT = {throwaway: "throwaway", same_inbox: "same\\ inbox", automation: "automation", hidden_field: "hidden\\ field",
+  fast_fill: "fast\\ fill", device_reuse: "device\\ reuse", no_device_check: "no\\ device\\ check", datacenter: "datacenter",
+  machine_name: "machine\\ name", swarm_size: "group\\ size", shared_identity: "group\\ match", timing: "group\\ timing",
+  organisation: "organisation"};
+const MCOL = {s: "#7aa2f7", g: "#f2b84b", n: "#4fd08a"};
+let mathDrawn = false, mathExampleId = null;
+function term(f, i, val) {
+  const col = f.weight < 0 ? MCOL.n : i >= 9 ? MCOL.g : MCOL.s;
+  const w = Math.abs(f.weight).toFixed(1), sign = f.weight < 0 ? "-" : "+";
+  const x = val === undefined ? `x_{\\text{${SHORT[f.key] || f.key}}}` : `(${val.toFixed(2)})`;
+  return `${sign}\\,{\\color{${col}}${w}\\,${x}}`;
 }
-function eqnHtml(r) {
-  const on = {};
-  (r ? r.parts : []).forEach((p) => on[p.key] = p);
-  const terms = MODEL.factors.map((f, i) => {
-    const p = on[f.key];
-    const cls = `term${i >= 9 ? " g" : ""}${f.weight < 0 ? " neg" : ""}${p ? " on" : ""}`;
-    return `<span class="${cls}" title="${esc(f.label)}: ${esc(f.measure)}"><span class="w">${f.weight < 0 ? "−" : ""}${Math.abs(f.weight)}</span>·<span>${esc(f.label.toLowerCase())}</span><span class="x">${p ? "=" + Number(p.x).toFixed(2) : ""}</span></span>`;
-  });
-  return `<span class="lhs">z =</span><span class="term on">${MODEL.bias}</span>` + terms.map((t) => `<span class="op">+</span>${t}`).join("");
-}
-function drawWaterfall(r, z) {
-  const W = 640, H = 300, L = 235, R = 44, T = 14, rowH = 22;
-  const parts = (r.parts || []).filter((p) => p.contribution);
-  const rows = [{label: "start", c: MODEL.bias}].concat(parts.map((p) => ({label: p.label, c: p.contribution})));
-  const n = rows.length + 1, h = Math.min(rowH, (H - T - 30) / n);
-  const X = (v) => L + (W - L - R) * (Math.max(Z_MIN, Math.min(Z_MAX, v)) - Z_MIN) / (Z_MAX - Z_MIN);
-  let out = "";
-  for (let v = Z_MIN; v <= Z_MAX; v += 2) out += `<line x1="${X(v)}" x2="${X(v)}" y1="${T}" y2="${H - 22}" stroke="var(--line)"/><text x="${X(v)}" y="${H - 6}" text-anchor="middle" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${v}</text>`;
-  out += `<line x1="${X(ZR)}" x2="${X(ZR)}" y1="${T}" y2="${H - 22}" stroke="var(--review)" stroke-dasharray="4 4"/><line x1="${X(ZB)}" x2="${X(ZB)}" y1="${T}" y2="${H - 22}" stroke="var(--block)" stroke-dasharray="4 4"/>`;
-  let acc = 0;
-  rows.forEach((row, i) => {
-    const y = T + i * h, a = i === 0 ? 0 : acc, b = i === 0 ? row.c : acc + row.c;
-    const x0 = X(Math.min(a, b)), x1 = X(Math.max(a, b));
-    const fill = i === 0 ? "var(--muted)" : row.c < 0 ? "var(--allow)" : "var(--accent)";
-    out += `<text x="${L - 8}" y="${y + h * 0.7}" text-anchor="end" fill="var(--fg2)" font-size="12">${esc(row.label)}</text>`;
-    out += `<rect x="${x0}" y="${y + 2}" width="${Math.max(2, x1 - x0)}" height="${h - 4}" rx="3" fill="${fill}" opacity="${i === 0 ? .55 : .9}"/>`;
-    out += `<text x="${x1 + 5}" y="${y + h * 0.7}" fill="var(--fg)" font-size="11" font-family="JetBrains Mono, monospace">${i === 0 ? row.c.toFixed(1) : fmt(row.c)}</text>`;
-    acc = b;
-  });
-  const y = T + rows.length * h;
-  const col = r.score >= 60 ? "var(--block)" : r.score >= 35 ? "var(--review)" : "var(--allow)";
-  out += `<text x="${L - 8}" y="${y + h * 0.7}" text-anchor="end" fill="var(--fg)" font-size="12" font-weight="700">z</text>`;
-  out += `<rect x="${X(Z_MIN)}" y="${y + 2}" width="${Math.max(2, X(z) - X(Z_MIN))}" height="${h - 4}" rx="3" fill="${col}"/>`;
-  out += `<text x="${X(z) + 5}" y="${y + h * 0.7}" fill="var(--fg)" font-size="12" font-weight="700" font-family="JetBrains Mono, monospace">${z.toFixed(2)}</text>`;
-  $("waterfall").innerHTML = out;
-}
-function drawCurve(feed, sel) {
-  const W = 440, H = 300, L = 36, R = 14, T = 12, B = 28;
-  const X = (z) => L + (W - L - R) * (Math.max(Z_MIN, Math.min(Z_MAX, z)) - Z_MIN) / (Z_MAX - Z_MIN);
-  const Y = (s) => T + (H - T - B) * (1 - s / 100);
-  let out = `<rect x="${L}" y="${Y(100)}" width="${W - L - R}" height="${Y(60) - Y(100)}" fill="var(--block)" opacity=".08"/>
-    <rect x="${L}" y="${Y(60)}" width="${W - L - R}" height="${Y(35) - Y(60)}" fill="var(--review)" opacity=".08"/>
-    <rect x="${L}" y="${Y(35)}" width="${W - L - R}" height="${Y(0) - Y(35)}" fill="var(--allow)" opacity=".06"/>`;
-  for (const v of [0, 35, 60, 100]) out += `<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${v}</text>`;
-  for (let v = Z_MIN; v <= Z_MAX; v += 4) out += `<text x="${X(v)}" y="${H - 8}" text-anchor="middle" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">z=${v}</text>`;
-  let d = "";
-  for (let k = 0; k <= 160; k++) { const z = Z_MIN + (Z_MAX - Z_MIN) * k / 160; d += `${k ? "L" : "M"}${X(z).toFixed(1)},${Y(100 / (1 + Math.exp(-z))).toFixed(1)}`; }
-  out += `<path d="${d}" fill="none" stroke="var(--fg2)" stroke-width="2"/>`;
-  out += `<text x="${W - R}" y="${Y(80)}" text-anchor="end" fill="var(--block)" font-size="11">block</text><text x="${W - R}" y="${Y(47)}" text-anchor="end" fill="var(--review)" font-size="11">review</text><text x="${W - R}" y="${Y(15)}" text-anchor="end" fill="var(--allow)" font-size="11">allow</text>`;
-  for (const r of feed) {
-    if (r.id === sel.id) continue;
-    const z = zOf(r);
-    out += `<circle cx="${X(z)}" cy="${Y(100 / (1 + Math.exp(-z)))}" r="4.5" fill="${r.source === "attack" ? "var(--attack)" : "var(--visitor)"}" opacity=".55"/>`;
+function renderMath(model, feed) {
+  if (!model || !window.katex) return;
+  if (!mathDrawn) {
+    const F = model.factors, b = String(model.bias);
+    const line = (from, to) => F.slice(from, to).map((f, k) => term(f, from + k)).join("\\;");
+    const tex = `\\begin{aligned}
+      \\text{bot score} &= \\frac{100}{1 + e^{-z}} \\\\[6pt]
+      z &= ${b} \\;${line(0, 5)} \\\\
+        &\\phantom{= ${b}}\\;${line(5, 9)} \\\\
+        &\\phantom{= ${b}}\\;${line(9, 13)}
+    \\end{aligned}`;
+    katex.render(tex, $("mathMain"), {displayMode: true, throwOnError: false, trust: false});
+    mathDrawn = true;
   }
-  const zs = zOf(sel), sy = Y(100 / (1 + Math.exp(-zs)));
-  out += `<line x1="${X(zs)}" x2="${X(zs)}" y1="${sy}" y2="${H - B}" stroke="var(--accent)" stroke-dasharray="3 3"/>`;
-  out += `<circle cx="${X(zs)}" cy="${sy}" r="9" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="${X(zs)}" cy="${sy}" r="4" fill="var(--accent)"/>`;
-  out += `<text x="${Math.min(X(zs) + 12, W - 60)}" y="${sy - 10}" fill="var(--accent)" font-size="13" font-weight="700" font-family="JetBrains Mono, monospace">${esc(sel.ticket || "")} ${sel.score}</text>`;
-  $("curve").innerHTML = out;
+  // Worked example: the newest signup that has at least one factor above zero.
+  const r = (feed || []).find((x) => (x.parts || []).length);
+  if (!r || r.id + ":" + r.score === mathExampleId) { if (!r) $("mathExample").innerHTML = ""; return; }
+  mathExampleId = r.id + ":" + r.score;
+  const on = {}; r.parts.forEach((p) => on[p.key] = p);
+  const used = model.factors.map((f, i) => [f, i]).filter(([f]) => on[f.key]);
+  const z = model.bias + used.reduce((a, [f]) => a + f.weight * on[f.key].x, 0);
+  const sc = 100 / (1 + Math.exp(-z));
+  const tex = `\\text{ticket ${String(r.ticket || "").replace(/[^A-Z0-9]/g, "")}:}\\quad z = ${model.bias}\\;${used.map(([f, i]) => term(f, i, on[f.key].x)).join("\\;")} = ${z.toFixed(2)}
+    \\;\\Rightarrow\\; \\frac{100}{1 + e^{-(${z.toFixed(2)})}} = ${sc.toFixed(0)}`;
+  katex.render(tex, $("mathExample"), {displayMode: true, throwOnError: false, trust: false});
 }
 let testedDrawn = false;
 function renderTested(t) {
@@ -385,19 +325,17 @@ function render(s) {
     const changed = !isNew && !first && lastScore[r.id] !== undefined && lastScore[r.id] !== r.score;
     const col = r.score >= 60 ? "var(--block)" : r.score >= 35 ? "var(--review)" : "var(--allow)";
     const chg = r.score_at_signup !== null && r.score_at_signup !== r.score ? `<span class="chg">${r.score_at_signup} at signup → ${r.score} now</span>` : "";
-    return `<div class="person${isNew ? " new" : changed ? " changed" : ""}" data-id="${esc(r.id)}" style="cursor:pointer">
+    return `<div class="person${isNew ? " new" : changed ? " changed" : ""}">
       <div><div class="tk">${esc(r.ticket || "")}</div><div class="t meta">${clock(r.time)}</div></div>
       <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}</div>
       <div class="sc"><div class="num" style="color:${col}">${r.score ?? "–"}</div><div class="bar"><i style="width:${r.score || 0}%; background:${col}"></i></div></div>
       ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b> ${esc(p.label || "")} <span class="meta">(${Number(p.x).toFixed(2)} × ${p.weight})</span> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No factor above zero: z = −4, score ${r.score}.</div>`}</div>`;
   }).join("") : `<p class="empty">Waiting for the first signup…</p>`;
   s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
-  $("feed").querySelectorAll(".person").forEach((el) => el.onclick = () => { selId = el.dataset.id; renderDecide(lastFeed); document.getElementById("decide").scrollIntoView({behavior: "smooth", block: "start"}); });
   drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
   renderTested(s.tested);
+  renderMath(s.model, s.feed);
   renderBans(s.bans || [], s.ban_after);
-  if (s.model) MODEL = s.model;
-  renderDecide(s.feed);
   if (s.model && !$("ftable").dataset.done) {
     $("bias").textContent = String(s.model.bias).replace("-", "−");
     $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${i >= 9 ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");

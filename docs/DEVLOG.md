@@ -124,3 +124,5 @@
 - Forged logs after the fixes: standard and hard both 0 of 16,864 people blocked and 0 sent to review; 85.7% of bots blocked; AUC 0.93 / 0.92.
 - Dashboard: "How Sargas decides, live": the equation with every term, the active terms lit with their values for the selected signup; a waterfall of contributions from -4 to z with the review and block lines; the logistic curve with every live signup placed on it. Click a ticket or a person row to select.
 - Deployed and reset; unit tests not rerun.
+
+**20:13:58** Tom rolled back the previous session's changes (commit f218eb3: score-logic changes and the 2D "How Sargas decides" panel) because he did not want them; committed that rollback. Added only a typeset equation panel "The formula" to the dashboard (KaTeX from cdnjs): bot score = 100/(1+e^-z) and z with all 13 weighted terms, coloured by signup / group / lowers-the-score, built from the live model weights, plus a worked example with the newest scored signup's numbers. No graphs changed. Deployed; tests not rerun.

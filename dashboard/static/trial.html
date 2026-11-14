@@ -228,14 +228,7 @@ async function deviceId() {
     g.textBaseline = "top"; g.font = "16px Arial"; g.fillStyle = "#8a4b1f"; g.fillText("Neighbr 2026", 4, 8);
     canvasSig = c.toDataURL().slice(-64);
   } catch (e) {}
-  // A random ID kept in this browser makes two identical phones different
-  // devices, while the same phone signing up again is still recognised.
-  let local = "";
-  try {
-    local = localStorage.getItem("neighbrDevice") || "";
-    if (!local) { local = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join(""); localStorage.setItem("neighbrDevice", local); }
-  } catch (e) {}
-  const parts = [local, navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
+  const parts = [navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
     screen.colorDepth, devicePixelRatio, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency,
     navigator.platform, navigator.maxTouchPoints, canvasSig];
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
