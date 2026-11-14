@@ -77,3 +77,11 @@
 - Local run of the full attack: naive-bot 12/12 blocked at signup; alias-farm 6 blocked at signup, all 10 in the end; stealth-farm 11 blocked at signup, 4 caught afterwards; humanlike 6 review only because all attacks share one IP.
 - Not done: deployment. Waiting for the Hostinger account and domain.
 - Question: which domain name, and who holds the VPS login?
+
+**17:26:24** Judges' feedback (via Tom): scoring every user with a stated reason, on the forged bot activity logs, counts as testing. They want live per-user scores on the dashboard, and people on their phones should see their own score change live.
+- Added a bot score (0 to 100) per signup in `signup_guard.py`: the stronger of the per-signup points and the group verdict (block 90, review 55, organisation 40). Every point comes with its reason. Documented as a ranking score with stated rules, not a calibrated probability.
+- Added a graded signal: 2 to 4 accounts on one device score 5 points per extra account (families share devices, so it stays weak). 5 or more is the existing device-farm signal.
+- `eval_signups.py` now measures the score on the 10 forged logs: AUC 0.92 (standard and hard), with no real people at 70 or more (0 of 16,864). At 70 or more, 85.7% of bots (hard logs: 73.7%). Mean score per group is in the table; the human-like operator scores 0, like real people.
+- Live demo: every signup gets a 4-character ticket and a private token. The trial page shows "your live bot score", with reasons, a gauge and a history line, polling every 2 s (`/api/trial/status`). The dashboard lists people by ticket with live scores and points per reason, a live score histogram by source, and the forged-log test results.
+- Decision: `GUARD_SHOW_SCORE=1` (default) shows people their own score and reasons for the demo. A real site would turn it off, because it teaches attackers what is checked.
+- Tests: 61 passing.

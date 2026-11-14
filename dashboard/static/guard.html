@@ -69,6 +69,22 @@ table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th { text-align: left; color: var(--fg2); font-weight: 600; font-size: 12px; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.person { display: grid; grid-template-columns: 64px 1fr 120px; gap: 4px 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); align-items: center; }
+.person .tk { font: 700 17px var(--mono); letter-spacing: .06em; }
+.person .who { font: 500 14px var(--mono); overflow-wrap: anywhere; }
+.person .sc { text-align: right; }
+.person .num { font: 700 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+.person .bar { height: 6px; border-radius: 3px; background: var(--panel2); margin-top: 6px; overflow: hidden; }
+.person .bar i { display: block; height: 100%; border-radius: 3px; transition: width .6s ease; }
+.person .why { grid-column: 2 / 4; color: var(--fg2); font-size: 13px; }
+.person .chg { font: 600 12px var(--mono); color: var(--review); }
+.person.new, .person.changed { animation: flash 1.8s ease-out; }
+.mini svg { display: block; width: 100%; height: 120px; }
+.mini .cap { font-size: 13px; color: var(--fg2); margin-top: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.big2 { font: 700 30px var(--display); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .person.new, .person.changed, .person .bar i { animation: none; transition: none; } }
 @media (prefers-reduced-motion: reduce) { .live i, .row.new { animation: none; } }
 </style>
 </head>
@@ -97,10 +113,19 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     <svg id="bars" viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="Signups per 30 seconds by verdict"></svg>
   </div>
 
+  <div class="two">
+    <div class="panel mini"><h2>Bot scores right now (live signups)</h2>
+      <svg id="liveHist" viewBox="0 0 500 120" preserveAspectRatio="none" role="img" aria-label="Live bot score distribution by source"></svg>
+      <div class="legend"><span style="--c: var(--attack)">attack script</span><span style="--c: var(--visitor)">real visitors</span><span style="--c: var(--sim)">simulated customers</span></div>
+      <div class="cap">Bot score 0 to 100. Under 35 allowed, 35 to 59 review, 60 and over blocked.</div></div>
+    <div class="panel mini"><h2>How the score was tested (forged bot activity logs)</h2>
+      <div id="tested"><p class="empty">No evaluation file yet.</p></div></div>
+  </div>
+
   <div class="grid">
     <div class="panel"><h2>Swarms detected right now</h2><div id="groups"><p class="empty">No groups of linked signups yet.</p></div>
       <h2 style="margin-top:18px">Attack campaigns (answer key from the attack script)</h2><div id="campaigns"><p class="empty">No attack yet.</p></div></div>
-    <div class="panel"><h2>Live signups</h2><div class="feed" id="feed"><p class="empty">Waiting for the first signup…</p></div></div>
+    <div class="panel"><h2>People being scored live</h2><div class="feed" id="feed"><p class="empty">Waiting for the first signup…</p></div></div>
   </div>
   <p class="meta">Emails are masked. The detector never sees which signups come from the attack script; that label is only used for the scoreboard.
     Simulated customers keep normal traffic flowing; real visitors are people using the trial page. History: two weeks of simulated ordinary signups.</p>
@@ -143,7 +168,41 @@ function drawBars(timeline) {
   $("bars").innerHTML = s;
 }
 
-let version = -1, seen = new Set(), first = true, lastOk = Date.now();
+let version = -1, seen = new Set(), first = true, lastOk = Date.now(), lastScore = {};
+function drawHist(svg, series, log = false) {
+  const W = 500, H = 120, pad = 18, n = 10, bw = W / n;
+  const tot = Array.from({length: n}, (_, i) => series.reduce((a, [v]) => a + v[i], 0));
+  const f = (v) => log ? Math.log10(1 + v) : v;
+  const max = Math.max(1, ...tot.map(f));
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    let y = H - pad, acc = 0;
+    for (const [v, col] of series) {
+      if (!v[i]) continue;
+      const h0 = (H - pad - 18) * f(acc) / max, h1 = (H - pad - 18) * f(acc + v[i]) / max;
+      out += `<rect x="${i * bw + 3}" y="${H - pad - h1}" width="${bw - 6}" height="${h1 - h0}" fill="${col}" rx="2"/>`;
+      acc += v[i];
+    }
+    if (tot[i]) out += `<text x="${i * bw + bw / 2}" y="${H - pad - (H - pad - 18) * f(tot[i]) / max - 4}" text-anchor="middle" fill="var(--fg2)" font-size="11" font-family="JetBrains Mono, monospace">${tot[i]}</text>`;
+    out += `<text x="${i * bw + bw / 2}" y="${H - 4}" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="JetBrains Mono, monospace">${i * 10}</text>`;
+  }
+  out += `<line x1="${3.5 * bw}" x2="${3.5 * bw}" y1="0" y2="${H - pad}" stroke="var(--review)" stroke-dasharray="3 3"/><line x1="${6 * bw}" x2="${6 * bw}" y1="0" y2="${H - pad}" stroke="var(--block)" stroke-dasharray="3 3"/>`;
+  svg.innerHTML = out;
+}
+let testedDrawn = false;
+function renderTested(t) {
+  if (!t || testedDrawn) return;
+  const st = t.standard, hd = t.hard;
+  $("tested").innerHTML = `<div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:6px">
+      <div><div class="big2">${st.auc.toFixed(2)}</div><div class="meta">AUC, ${st.bots_total.toLocaleString()} bots vs ${st.people_total.toLocaleString()} people</div></div>
+      <div><div class="big2">${st.cut70.false_positive_rate}%</div><div class="meta">people scoring 70+ (${st.cut70.fp} of ${(st.cut70.fp + st.cut70.tn).toLocaleString()})</div></div>
+      <div><div class="big2">${st.cut70.recall}%</div><div class="meta">bots scoring 70+ (hard logs: ${hd ? hd.cut70.recall + "%" : "–"})</div></div></div>
+    <svg id="testHist" viewBox="0 0 500 120" preserveAspectRatio="none" role="img" aria-label="Score distribution for bots and people in the forged logs"></svg>
+    <div class="legend"><span style="--c: var(--attack)">bots in the logs</span><span style="--c: var(--sim)">people in the logs</span><span>log scale</span></div>
+    <div class="cap">10 forged signup logs with an answer key (5 standard, 5 with smarter attackers). Every user is scored with reasons. The tail of bots at 0 is the careful human-like operator we do not catch.</div>`;
+  drawHist($("testHist"), [[st.people, "var(--sim)"], [st.bots, "var(--attack)"]], true);
+  testedDrawn = true;
+}
 function render(s) {
   const sb = s.scoreboard;
   $("atkBig").textContent = sb.attack.total; $("atkSplit").innerHTML = split(sb.attack, false);
@@ -161,13 +220,18 @@ function render(s) {
     : `<p class="empty">No attack yet.</p>`;
   $("feed").innerHTML = s.feed.length ? s.feed.map((r) => {
     const isNew = !first && !seen.has(r.id);
-    const later = r.at_signup && r.at_signup !== r.action ? `<div class="later">${esc(r.at_signup)} at signup → ${esc(r.action)} now</div>` : "";
-    return `<div class="row${isNew ? " new" : ""}"><div class="t">${clock(r.time)}</div>
-      <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span>${later}</div>
-      <div><span class="chip ${esc(r.action)}">${esc(r.action)}</span></div>
-      ${r.reasons.length ? `<div class="reasons">${r.reasons.map(esc).join(" · ")}</div>` : ""}</div>`;
+    const changed = !isNew && !first && lastScore[r.id] !== undefined && lastScore[r.id] !== r.score;
+    const col = r.score >= 60 ? "var(--block)" : r.score >= 35 ? "var(--review)" : "var(--allow)";
+    const chg = r.score_at_signup !== null && r.score_at_signup !== r.score ? `<span class="chg">${r.score_at_signup} at signup → ${r.score} now</span>` : "";
+    return `<div class="person${isNew ? " new" : changed ? " changed" : ""}">
+      <div><div class="tk">${esc(r.ticket || "")}</div><div class="t meta">${clock(r.time)}</div></div>
+      <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}</div>
+      <div class="sc"><div class="num" style="color:${col}">${r.score ?? "–"}</div><div class="bar"><i style="width:${r.score || 0}%; background:${col}"></i></div></div>
+      ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>+${p.points}</b> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No check failed.</div>`}</div>`;
   }).join("") : `<p class="empty">Waiting for the first signup…</p>`;
-  s.feed.forEach((r) => seen.add(r.id)); first = false;
+  s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
+  drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
+  renderTested(s.tested);
 }
 
 async function poll() {

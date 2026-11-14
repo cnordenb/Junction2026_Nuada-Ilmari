@@ -42,6 +42,9 @@ DB_PATH = Path(os.environ.get("GUARD_DB", ROOT / "data" / "live" / "guard.sqlite
 DEMO_KEY = os.environ.get("GUARD_DEMO_KEY", "")
 SIM_EVERY = float(os.environ.get("GUARD_SIM_EVERY", "20"))       # seconds between simulated customers, on average
 TRUST_PROXY = os.environ.get("SIGNUP_TRUST_PROXY", "0") == "1"
+# Demo transparency: show people their own live bot score and its reasons.
+# A real site would turn this off, since it teaches attackers what is checked.
+SHOW_SCORE = os.environ.get("GUARD_SHOW_SCORE", "1") == "1"
 WINDOW_DAYS = 7
 MAX_LIVE_ROWS = 20000
 FIELDS = ["id", "created_at", "email", "username", "ip", "asn", "asn_org", "user_agent", "device_id",
@@ -66,6 +69,11 @@ def _db() -> sqlite3.Connection:
         id TEXT PRIMARY KEY, created_at REAL, email TEXT, username TEXT, ip TEXT, asn TEXT, asn_org TEXT,
         user_agent TEXT, device_id TEXT, fill_ms TEXT, honeypot TEXT, webdriver TEXT,
         source TEXT, campaign TEXT, action_at_signup TEXT, action_now TEXT, reasons TEXT, risk INTEGER)""")
+    have = {r[1] for r in con.execute("PRAGMA table_info(signups)")}
+    for col, kind in (("score", "INTEGER"), ("score_at_signup", "INTEGER"), ("parts", "TEXT"),
+                      ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT")):
+        if col not in have:
+            con.execute(f"ALTER TABLE signups ADD COLUMN {col} {kind}")
     return con
 
 
@@ -92,17 +100,27 @@ def _live_rows(since: float) -> list[sqlite3.Row]:
 
 # ---------------------------------------------------------------- judging
 
+TICKET_ALPHABET = "ACDEFHJKLMNPQRTUVWXY3479"
+
+
+def _ticket() -> str:
+    return "".join(secrets.choice(TICKET_ALPHABET) for _ in range(4))
+
+
 def judge(row: dict, source: str, campaign: str = "") -> dict:
     """Store a signup, re-judge the recent stream, return this signup's verdict."""
+    ticket, token = _ticket(), secrets.token_hex(16)
     with _lock:
         _con.execute("INSERT INTO signups (id, created_at, email, username, ip, asn, asn_org, user_agent, device_id, "
-                     "fill_ms, honeypot, webdriver, source, campaign) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                     [row[f] for f in FIELDS] + [source, campaign])
+                     "fill_ms, honeypot, webdriver, source, campaign, ticket, token, history) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     [row[f] for f in FIELDS] + [source, campaign, ticket, token, "[]"])
         _rejudge()
-        out = _con.execute("SELECT action_now, reasons, risk FROM signups WHERE id = ?", (row["id"],)).fetchone()
-        _con.execute("UPDATE signups SET action_at_signup = action_now WHERE id = ?", (row["id"],))
+        out = _con.execute("SELECT action_now, reasons, score, parts FROM signups WHERE id = ?", (row["id"],)).fetchone()
+        _con.execute("UPDATE signups SET action_at_signup = action_now, score_at_signup = score WHERE id = ?", (row["id"],))
         _con.commit()
-        return {"id": row["id"], "action": out["action_now"], "reasons": json.loads(out["reasons"] or "[]")}
+        return {"id": row["id"], "ticket": ticket, "token": token, "action": out["action_now"], "score": out["score"],
+                "parts": json.loads(out["parts"] or "[]"), "reasons": json.loads(out["reasons"] or "[]")}
 
 
 def _rejudge() -> None:
@@ -117,17 +135,19 @@ def _rejudge() -> None:
     frame["time"] = frame["time"].astype(float)
     report = analyse(Signups(frame, {}, len(frame)), sample=0, per_row=True)
     offset = len(HISTORY)
-    clusters = {c["id"]: c for c in report["clusters"]}
+    now = time.time()
     updates = []
     for k, r in enumerate(live):
         i = offset + k
-        reasons = list(report["reasons"][i])
-        c = clusters.get(report["cluster_of"][i])
-        if c and report["actions"][i] != "allow" and c["action"] != "allow":
-            shared = "; ".join(e["text"] for e in c["evidence"][:2])
-            reasons.insert(0, f"Linked to {c['size'] - 1} other signups: {shared}. {c['timing']}")
-        updates.append((report["actions"][i], json.dumps(reasons), report["risk"][i], r["id"]))
-    _con.executemany("UPDATE signups SET action_now = ?, reasons = ?, risk = ? WHERE id = ?", updates)
+        parts = report["score_parts"][i]
+        score = int(report["score"][i])
+        history = json.loads(r["history"] or "[]")
+        if not history or history[-1][1] != score:
+            history.append([round(now, 1), score])     # every change of this person's score, for the live view
+        updates.append((report["actions"][i], json.dumps([x["reason"] for x in parts]), report["risk"][i], score,
+                        json.dumps(parts), json.dumps(history[-50:]), r["id"]))
+    _con.executemany("UPDATE signups SET action_now = ?, reasons = ?, risk = ?, score = ?, parts = ?, history = ? "
+                     "WHERE id = ?", updates)
     _state.update(report=report, offset=offset, live_ids=[r["id"] for r in live], version=_state["version"] + 1)
 
 
@@ -209,8 +229,45 @@ def trial_signup(item: TrialSignup, request: Request) -> dict:
     messages = {"allow": "Your 14-day trial is ready. Check your inbox for the login link.",
                 "review": "Almost there. We need to confirm this signup before your trial starts.",
                 "block": "We couldn't create a trial account with these details."}
-    return {"id": result["id"], "action": result["action"], "message": messages[result["action"]],
-            "reasons": result["reasons"] if campaign else []}
+    out = {"id": result["id"], "ticket": result["ticket"], "action": result["action"],
+           "message": messages[result["action"]], "reasons": result["reasons"] if campaign else []}
+    if SHOW_SCORE:
+        out.update(token=result["token"], score=result["score"], parts=result["parts"])
+    return out
+
+
+@router.get("/api/trial/status")
+def trial_status(id: str, token: str) -> dict:
+    """One person's live bot score, for the page they signed up on. Needs the
+    token handed out at signup, so nobody can look up someone else."""
+    if not SHOW_SCORE:
+        raise HTTPException(404, "Not available.")
+    with _lock:
+        r = _con.execute("SELECT * FROM signups WHERE id = ?", (id[:40],)).fetchone()
+        version = _state["version"]
+        total = _con.execute("SELECT COUNT(*) FROM signups").fetchone()[0]
+    if r is None or not secrets.compare_digest(r["token"] or "", token[:64]):
+        raise HTTPException(404, "Signup not found. Live signups are cleared between demos.")
+    return {"ticket": r["ticket"], "score": r["score"], "score_at_signup": r["score_at_signup"],
+            "action": r["action_now"], "action_at_signup": r["action_at_signup"],
+            "parts": json.loads(r["parts"] or "[]"), "history": json.loads(r["history"] or "[]"),
+            "version": version, "live_signups": total, "now": time.time()}
+
+
+def _evaluation_summary() -> dict | None:
+    path = ROOT / "data" / "signups" / "evaluation.json"
+    try:
+        ev = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    out = {}
+    for name in ("standard", "hard"):
+        sq = ev.get(name, {}).get("score")
+        if sq:
+            cut70 = next((c for c in sq["cutoffs"] if c["cut"] == 70), None)
+            out[name] = {"auc": sq["auc"], "bots": sq["bots"], "people": sq["people"], "bins": sq["bins"],
+                         "bots_total": sq["bots_total"], "people_total": sq["people_total"], "cut70": cut70}
+    return out or None
 
 
 def _mask(email: str) -> str:
@@ -276,13 +333,22 @@ def guard_state(since_version: int = -1) -> dict:
     groups.sort(key=lambda g: -g["last"])
 
     feed = sorted(rows.values(), key=lambda r: -r["created_at"])[:40]
+    bins = list(range(0, 101, 10))
+    score_hist = {src: [0] * 10 for src in ("attack", "visitor", "simulated")}
+    for r in rows.values():
+        if r["score"] is not None and r["source"] in score_hist:
+            score_hist[r["source"]][min(int(r["score"]) // 10, 9)] += 1
     return {
         "version": version, "now": now, "uptime": now - _state["started"],
         "history_rows": len(HISTORY), "live_rows": len(rows), "recent_30min": len(recent),
         "scoreboard": scoreboard, "campaigns": campaigns, "timeline": timeline, "groups": groups[:6],
+        "score_hist": score_hist, "score_bins": bins, "tested": _evaluation_summary(),
         "feed": [{"id": r["id"], "time": r["created_at"], "email": _mask(r["email"]), "source": r["source"],
                   "campaign": r["campaign"], "action": r["action_now"], "at_signup": r["action_at_signup"],
-                  "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3]} for r in feed],
+                  "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3],
+                  "parts": json.loads(r["parts"] or "[]")[:3],
+                  "ticket": r["ticket"], "score": r["score"], "score_at_signup": r["score_at_signup"],
+                  "history": json.loads(r["history"] or "[]")[-12:]} for r in feed],
     }
 
 

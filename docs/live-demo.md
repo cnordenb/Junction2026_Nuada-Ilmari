@@ -17,6 +17,14 @@ Locally the same pages are at `http://127.0.0.1:8000/trial` and `/guard`.
 - **The scoreboard's answer key:** the attack script sends a header with its campaign name (`X-Demo-Truth`, checked against `GUARD_DEMO_KEY`). It is stored for the scoreboard only and never given to the detector. Anything without it counts as a real visitor.
 - **What the trial form collects:** a device hash (browser properties and a canvas drawing), how long the form took, the browser's automation flag, and a hidden field people never see. No passwords. The page says to use any address; nothing is sent.
 
+## Live bot scores
+
+Every signup gets a **bot score from 0 to 100** with the points and reason behind it. The score is the stronger of the per-signup checks and the verdict of the group the signup belongs to (block 90, review 55, organisation 40). Under 35 is allowed, 35 to 59 goes to review, 60 and over is blocked. It is a ranking score with stated rules, not a calibrated probability.
+
+- **On the phone:** after signing up, the trial page shows your ticket (e.g. `VCXN`), your live score, the reasons and how the score has moved. It updates every 2 seconds. Sign up again from the same phone and watch it climb.
+- **On the dashboard:** every person by ticket with their live score, the points per reason, and "score at signup → now" when a farm is caught later. Also a live histogram of scores by source, and the results on the forged logs.
+- **Tested on forged bot activity logs** (`scripts/eval_signups.py`, 10 logs with an answer key): AUC 0.92; 0 of 16,864 people score 70 or more; 85.7% of bots do (73.7% on hard logs).
+
 ## Deploy (Hostinger VPS)
 
 1. DNS: point `A` records for `<domain>`, `trial.<domain>` and `guard.<domain>` at the VPS IP.

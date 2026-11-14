@@ -73,6 +73,10 @@ SIGNAL_POINTS = {"disposable": 45, "inbox_reuse": 50, "automation": 50, "hosting
                  "honeypot": 60, "webdriver": 50, "fast_fill": 30}
 FAST_FILL_SECONDS = 1.5
 BLOCK_RISK, REVIEW_RISK = 60, 35
+# Bot score (0-100) = the stronger of two pieces of evidence: the per-signup
+# points, or the verdict of the group the signup belongs to. It is a ranking
+# score with stated rules, not a calibrated probability.
+GROUP_POINTS = {"block": 90, "review": 55, "organisation": 40}
 
 CAVEATS = [
     "This flags patterns for a person to act on. Nothing here identifies who is behind an account.",
@@ -232,6 +236,10 @@ def signup_signals(frame: pd.DataFrame) -> list[list[dict]]:
         if row["device_id"] and device_counts.iat[i] >= DEFAULT_MIN_SIZE:
             signals.append({"signal": "device_farm", "points": SIGNAL_POINTS["device_farm"],
                             "reason": f"The same device created {device_counts.iat[i]} accounts."})
+        elif row["device_id"] and device_counts.iat[i] >= 2:
+            signals.append({"signal": "device_shared", "points": 5 * (int(device_counts.iat[i]) - 1),
+                            "reason": f"This device has created {device_counts.iat[i]} accounts. Families share "
+                                      "devices, so on its own this is weak."})
         if has_fp_column and not row["device_id"]:
             signals.append({"signal": "no_fingerprint", "points": SIGNAL_POINTS["no_fingerprint"],
                             "reason": "The browser did not run the device check on the signup page."})
@@ -420,6 +428,8 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
     risk = np.array([min(100, sum(s["points"] for s in sig)) for sig in signals], dtype=float)
     action = np.where(risk >= BLOCK_RISK, "block", np.where(risk >= REVIEW_RISK, "review", "allow")).astype(object)
     reason_src = ["signup checks" if a != "allow" else "" for a in action]
+    group_points = np.zeros(n)
+    group_reason = [""] * n
 
     x, link_info = link_matrix(frame)
     sim = (x @ x.T).tocsr()
@@ -452,6 +462,12 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
                 carried = sum(bool(e["match"](row)) for e in verdict["evidence"])
                 if carried < need or (identity_ev and not any(e["match"](row) for e in identity_ev)):
                     mine = "review"
+            if mine != "allow":
+                key = "organisation" if verdict["organisation"] else mine
+                group_points[i] = GROUP_POINTS[key]
+                shared = "; ".join(e["text"].rstrip(".") for e in verdict["evidence"][:2]) or "shared details"
+                group_reason[i] = (f"Linked to {len(idx) - 1} other signups: {shared}. {_timing_text(sync)} "
+                                   f"Group verdict: {verdict['why'][0]}")
             if ACTION_RANK[mine] > ACTION_RANK[action[i]]:
                 action[i] = mine
                 reason_src[i] = f"group {cid}"
@@ -467,6 +483,7 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
             "_idx": idx,
         })
     clusters.sort(key=lambda c: (-ACTION_RANK[c["action"]], -c["size"]))
+    score = np.minimum(100, np.maximum(risk, group_points))
 
     report = {
         "dataset": {"rows_read": su.rows_read, "signups": n, "columns_used": su.columns_used,
@@ -479,7 +496,7 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         "caveats": CAVEATS,
     }
     if su.labels is not None:
-        report["evaluation"] = evaluate(su, action, clusters)
+        report["evaluation"] = evaluate(su, action, clusters, score)
     for c in clusters:
         idx = c.pop("_idx")
         if per_row:
@@ -489,6 +506,11 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         report["risk"] = risk.astype(int).tolist()
         report["reasons"] = [[s["reason"] for s in sig] for sig in signals]
         report["cluster_of"] = cluster_of.tolist()
+        report["score"] = score.astype(int).tolist()
+        report["score_parts"] = [
+            ([{"points": int(group_points[i]), "reason": group_reason[i], "kind": "group"}] if group_points[i] else [])
+            + [{"points": s["points"], "reason": s["reason"], "kind": "signal"} for s in signals[i]]
+            for i in range(n)]
     return report
 
 
@@ -511,7 +533,26 @@ def _metrics(truth: np.ndarray, flagged: np.ndarray) -> dict:
             "false_positive_rate": round(100 * fp / (fp + tn), 2) if fp + tn else None}
 
 
-def evaluate(su: Signups, action: np.ndarray, clusters: list[dict]) -> dict:
+def score_quality(truth: np.ndarray, score: np.ndarray) -> dict:
+    """How well the bot score separates bots from people: AUC (chance that a
+    random bot scores higher than a random person), a histogram per class,
+    and precision / recall / false-positive rate at a few cut-offs."""
+    pos, neg = score[truth], score[~truth]
+    auc = None
+    if len(pos) and len(neg):
+        ranks = pd.Series(score).rank().to_numpy()
+        auc = float((ranks[truth].sum() - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
+    edges = list(range(0, 101, 10))
+    hist = lambda v: np.histogram(np.clip(v, 0, 99.999), bins=edges)[0].astype(int).tolist()
+    cuts = []
+    for cut in (30, 50, 70, 90):
+        m = _metrics(truth, score >= cut)
+        cuts.append({"cut": cut, **m})
+    return {"auc": None if auc is None else round(auc, 4), "bins": edges, "bots": hist(pos), "people": hist(neg),
+            "cutoffs": cuts, "bots_total": int(len(pos)), "people_total": int(len(neg))}
+
+
+def evaluate(su: Signups, action: np.ndarray, clusters: list[dict], score: np.ndarray | None = None) -> dict:
     labels = su.labels
     truth = np.array([is_positive_label(l) for l in labels])
     blocked = action == "block"
@@ -524,7 +565,13 @@ def evaluate(su: Signups, action: np.ndarray, clusters: list[dict]) -> dict:
         m = np.array([x == g for x in groups])
         by.append({"group": g, "abusive": bool(truth[m][0]), "signups": int(m.sum()),
                    "blocked": int(blocked[m].sum()), "review": int((action[m] == "review").sum())})
-    return {"block": _metrics(truth, blocked), "block_or_review": _metrics(truth, touched), "by_group": by}
+    out = {"block": _metrics(truth, blocked), "block_or_review": _metrics(truth, touched), "by_group": by}
+    if score is not None:
+        out["score"] = score_quality(truth, score)
+        for g in by:
+            m = np.array([x == g["group"] for x in groups])
+            g["mean_score"] = round(float(score[m].mean()), 1)
+    return out
 
 
 def read_table_note(su: Signups) -> list[str] | None:

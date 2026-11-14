@@ -91,3 +91,31 @@ def test_attack_campaigns_generate_valid_signups():
         assert items, name
         for body, ua, delay in items:
             assert "@" in body["email"] and ua and delay > 0
+
+
+def test_visitor_sees_own_live_score(client):
+    r = signup(client, "maria.garcia@example.es", device_id="5555eeee6666ffff", business="Studio Maria")
+    assert 0 <= r["score"] <= 100 and r["ticket"] and r["token"]
+    st = client.get(f"/api/trial/status?id={r['id']}&token={r['token']}").json()
+    assert st["ticket"] == r["ticket"] and st["score"] == r["score"] and st["history"]
+    assert client.get(f"/api/trial/status?id={r['id']}&token={'0' * 32}").status_code == 404
+
+
+def test_score_rises_when_one_device_keeps_signing_up(client):
+    # Every test request shares one IP and browser string, so start from an empty demo.
+    client.post("/api/guard/reset", headers={"X-Demo-Key": os.environ["GUARD_DEMO_KEY"]})
+    scores = []
+    for i, name in enumerate(["ahmed", "fatima", "omar", "leila", "yusuf", "amira"]):
+        r = signup(client, f"{name}.{['khan', 'ali', 'hassan', 'patel', 'sharma', 'singh'][i]}@example.org",
+                   device_id="sharedphone00001")
+        scores.append(r["score"])
+    assert scores[1] > scores[0]
+    assert scores[-1] >= 35
+    st = client.get("/api/guard/state").json()
+    assert all("score" in p and "ticket" in p for p in st["feed"])
+    assert sum(sum(v) for v in st["score_hist"].values()) == st["live_rows"]
+
+
+def test_dashboard_carries_test_results(client):
+    tested = client.get("/api/guard/state").json()["tested"]
+    assert tested and tested["standard"]["auc"] > 0.8
