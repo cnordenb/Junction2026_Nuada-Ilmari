@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free-tier guard</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --wash: rgba(11,11,11,.04);
+  --accent: #2a78d6; --block: #d03b3b; --review: #c98a00; --allow: #2f8f5b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
+    --accent: #3987e5; --block: #e5534b; --review: #e0a526; --allow: #46b07a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 18px; margin: 0 0 6px; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0 0 8px; }
+a { color: var(--accent); }
+.lede, .hint { color: var(--ink2); }
+.hint { font-size: 13px; }
+nav { display: flex; gap: 16px; font-size: 14px; margin: 8px 0 4px; flex-wrap: wrap; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-top: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 10px; }
+.row > div { min-width: 0; }
+label { display: block; font-size: 13px; color: var(--ink2); margin-bottom: 3px; }
+input[type=text], input[type=email], select {
+  font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--axis); border-radius: 6px; padding: 7px 9px; width: 100%; }
+.grow { flex: 1 1 220px; }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); padding: 7px 12px; }
+button:hover { background: var(--wash); }
+button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; padding: 8px 18px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; color: var(--ink2); font-weight: 600; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.wrap { overflow-wrap: anywhere; }
+.scroll { overflow-x: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+.tile { background: var(--page); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; }
+.tile .label { font-size: 13px; color: var(--ink2); }
+.tile .value { font-size: 26px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .03em;
+  padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); text-transform: uppercase; }
+.badge .dot { width: 9px; height: 9px; border-radius: 50%; }
+.badge.block .dot { background: var(--block); } .badge.review .dot { background: var(--review); } .badge.allow .dot { background: var(--allow); }
+.group { border-top: 1px solid var(--grid); padding: 12px 0; }
+.group header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 6px; }
+.group ul { margin: 4px 0; padding-left: 20px; }
+.why { font-weight: 600; }
+.msg { border-radius: 8px; padding: 10px 14px; margin-top: 12px; border: 1px solid var(--border); background: var(--page); }
+.msg.error { border-left: 4px solid var(--block); }
+.result { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: var(--page); border: 1px solid var(--border); }
+.result.block { border-left: 4px solid var(--block); } .result.review { border-left: 4px solid var(--review); } .result.allow { border-left: 4px solid var(--allow); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+code { font-size: 12px; background: var(--wash); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+details summary { cursor: pointer; color: var(--ink2); font-size: 14px; }
+.check { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink2); margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Free-tier guard</h1>
+  <p class="lede">Free plans attract bot networks that open hundreds of accounts for phishing, spam and abuse.
+    This tool spots those <b>swarms of fake signups</b>. It runs per-signup checks, then groups accounts that share rare details and
+    tests whether their timing beats chance. Every verdict comes with its reasons, and we publish our own error rates.</p>
+  <nav><a href="#live">Try it live</a><a href="#analyse">Analyse a signup stream</a><a href="#accuracy">How accurate is it?</a>
+    <a href="#how">How it decides</a><a href="/">Post swarm detector</a></nav>
+
+  <section class="card" id="live">
+    <h2>1. Try it live: sign up for a pretend free plan</h2>
+    <p class="hint">Your signup joins the end of a simulated two-week signup stream (3,500 accounts). Try one normal
+      signup, then try to farm accounts: five or more quick signups, or addresses like <code>user48213@mailinator.com</code>,
+      or <code>j.o.h.n.doe+1@gmail.com</code> followed by <code>johndoe+2@gmail.com</code>. Your test signups are kept in memory
+      for this browser only and deleted after two hours.</p>
+    <form id="liveForm" class="row" autocomplete="off">
+      <div class="grow"><label for="email">Email</label><input id="email" type="text" required maxlength="200" placeholder="name@example.com"></div>
+      <div class="grow"><label for="username">Username</label><input id="username" type="text" maxlength="100" placeholder="optional"></div>
+      <div><button class="primary" id="liveBtn" type="submit">Sign up</button></div>
+      <div><button type="button" id="resetBtn">Reset my test signups</button></div>
+    </form>
+    <div id="liveOut"></div>
+  </section>
+
+  <section class="card" id="analyse">
+    <h2>2. Analyse a signup stream</h2>
+    <p class="hint">The demo stream is simulated: 3,000 ordinary signups, five planted abuse campaigns, and innocent look-alikes
+      (a class signing up together, a company team, a newsletter rush, families on one laptop, VPN users). An answer key
+      lets you see exactly what the detector got right and wrong.</p>
+    <div class="row">
+      <div class="grow"><label for="dataset">Signup file</label><select id="dataset"></select></div>
+      <div><label class="check"><input type="checkbox" id="useKey" checked> Compare with the answer key</label></div>
+      <div><button class="primary" id="runBtn">Analyse</button></div>
+    </div>
+    <div id="runOut"></div>
+  </section>
+
+  <section class="card" id="accuracy">
+    <h2>3. How accurate is it?</h2>
+    <p class="hint">Measured on five fresh simulated streams (not the one we designed against), and on five "hard" streams where
+      attackers use tricks we did not tune for: throwaway domains missing from our list, normal browsers, 20 devices instead of 4,
+      looser timing. <b>These are simulated data written by our own team</b>, so they show the logic works as designed and
+      where it breaks. They are not a measurement on a real platform.</p>
+    <div id="evalOut"><p class="hint">Loading…</p></div>
+  </section>
+
+  <section class="card" id="how">
+    <h2>4. How it decides</h2>
+    <div class="two">
+      <div>
+        <h3>Per-signup checks (points)</h3>
+        <ul class="hint">
+          <li>Throwaway inbox service: 45</li>
+          <li>Several accounts on one inbox (Gmail ignores dots and +tags): 50</li>
+          <li>Browser says it is an automation tool: 50</li>
+          <li>One device behind 5+ accounts: 35</li>
+          <li>Datacenter or VPN network: 10 (weak on purpose: privacy users)</li>
+          <li>Device check did not run: 10</li>
+        </ul>
+        <p class="hint">60+ points: block. 35+: review.</p>
+      </div>
+      <div>
+        <h3>Swarm layer</h3>
+        <ul class="hint">
+          <li>Two signups are linked when they share enough <i>rare</i> details: device, real inbox, email pattern, username
+            pattern, exact browser build, IP, address block, network. Details shared by more than 3% of all signups
+            (gmail.com, the current Chrome) are ignored.</li>
+          <li>Each group's timing is compared with 4,000 random groups from the same stream: a tight burst, a timer, or the same
+            time every night.</li>
+          <li>Block only with shared identity details plus unusual timing, or a network/browser match plus strongly unusual timing,
+            or high per-signup risk. A member is blocked only if it carries the evidence itself.</li>
+          <li>A shared school or company email domain with no shared devices means an organisation. It goes to review and is never blocked.</li>
+        </ul>
+      </div>
+    </div>
+    <h3 style="margin-top:10px">Known limits</h3>
+    <ul class="hint" id="caveats"></ul>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const badge = (a) => `<span class="badge ${esc(a)}"><span class="dot"></span>${esc(a)}</span>`;
+const pct = (v) => v === null || v === undefined ? "–" : `${v}%`;
+
+function session() {
+  let s = null;
+  try { s = localStorage.getItem("guardSession"); } catch (e) {}
+  if (!s || !/^[0-9a-f]{32}$/.test(s)) {
+    s = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem("guardSession", s); } catch (e) {}
+  }
+  return s;
+}
+const SESSION = session();
+
+async function deviceId() {
+  // A deliberately simple device check: hashes a few stable browser properties.
+  const parts = [navigator.userAgent, navigator.language, screen.width, screen.height, screen.colorDepth,
+    Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency, navigator.platform];
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
+  return Array.from(new Uint8Array(buf).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  let body = null;
+  try { body = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((body && body.detail) ? (typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)) : `Request failed (${res.status})`);
+  return body;
+}
+
+function groupHtml(g, extra = "") {
+  return `<div class="group"><header>${badge(g.action)}<h3>Group ${esc(g.id)}: ${esc(g.size)} signups</h3>
+    <span class="hint">${esc((g.first || "").replace("T", " ").replace("Z", ""))} → ${esc((g.last || "").replace("T", " ").replace("Z", ""))} UTC</span>${extra}</header>
+    <ul>${g.evidence.map((e) => `<li>${esc(e.text)}</li>`).join("")}<li>${esc(g.timing)}</li></ul>
+    <p class="why">${g.why.map(esc).join(" ")}</p></div>`;
+}
+
+$("liveForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const btn = $("liveBtn"); btn.disabled = true;
+  try {
+    const r = await api("/api/signups/live", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({session: SESSION, email: $("email").value, username: $("username").value, device_id: await deviceId()})});
+    const l = r.latest;
+    let html = `<div class="result ${esc(l.action)}">${badge(l.action)} <b>${esc(l.email)}</b>
+      <ul>${(l.reasons.length ? l.reasons : ["No individual check failed."]).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    const g = r.groups.find((g) => g.live_members > 0);
+    html += g ? `<p class="hint">Your test signups are part of a group:</p>${groupHtml(g, `<span class="hint">${esc(g.live_members)} of them are yours</span>`)}`
+              : `<p class="hint">Not linked to any group of similar signups.</p>`;
+    html += `<p class="hint">What the server saw: IP ${esc(l.ip_seen)} · browser ${esc(l.ua_seen)}</p></div>`;
+    html += `<details style="margin-top:8px"><summary>Your test signups this session (${r.session.length})</summary><div class="scroll"><table>
+      <tr><th>Email</th><th>Username</th><th>Action now</th></tr>${r.session.slice().reverse().map((s) =>
+      `<tr><td class="wrap">${esc(s.email)}</td><td class="wrap">${esc(s.username)}</td><td>${badge(s.action)}</td></tr>`).join("")}</table></div></details>`;
+    $("liveOut").innerHTML = html;
+  } catch (e) {
+    $("liveOut").innerHTML = `<div class="msg error">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+});
+
+$("resetBtn").addEventListener("click", async () => {
+  await fetch(`/api/signups/live?session=${SESSION}`, {method: "DELETE"});
+  $("liveOut").innerHTML = `<div class="msg">Your test signups were deleted.</div>`;
+});
+
+function metricsTiles(ev) {
+  const b = ev.block, br = ev.block_or_review;
+  return `<div class="tiles">
+    <div class="tile"><div class="label">Precision when blocking</div><div class="value">${pct(b.precision)}</div><div class="sub">${b.tp} of ${b.tp + b.fp} blocked were abusive</div></div>
+    <div class="tile"><div class="label">Abusive accounts blocked</div><div class="value">${pct(b.recall)}</div><div class="sub">${b.tp} of ${b.tp + b.fn}</div></div>
+    <div class="tile"><div class="label">Real people blocked</div><div class="value">${pct(b.false_positive_rate)}</div><div class="sub">${b.fp} of ${b.fp + b.tn}</div></div>
+    <div class="tile"><div class="label">Real people sent to review</div><div class="value">${pct(br.false_positive_rate)}</div><div class="sub">${br.fp} of ${br.fp + br.tn} (blocked or review)</div></div>
+  </div>`;
+}
+
+function groupTable(rows) {
+  return `<div class="scroll"><table><tr><th>Group in the answer key</th><th>Really</th><th class="num">Signups</th><th class="num">Blocked</th><th class="num">Review</th><th class="num">Allowed</th></tr>
+    ${rows.map((g) => `<tr><td>${esc(g.group)}</td><td>${g.abusive ? "abuse" : "real people"}</td><td class="num">${g.signups}</td>
+      <td class="num">${g.blocked}</td><td class="num">${g.review}</td><td class="num">${g.signups - g.blocked - g.review}</td></tr>`).join("")}</table></div>`;
+}
+
+async function loadDatasets() {
+  const list = await api("/api/signups/datasets");
+  $("dataset").innerHTML = list.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+}
+
+$("runBtn").addEventListener("click", async () => {
+  const btn = $("runBtn"); btn.disabled = true;
+  $("runOut").innerHTML = `<p class="hint">Analysing…</p>`;
+  try {
+    const r = await api("/api/signups/analyze", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({dataset_id: $("dataset").value, label_col: $("useKey").checked ? "label" : null})});
+    const t = r.totals;
+    let html = `<p class="hint">${r.dataset.signups.toLocaleString()} signups analysed in ${r.elapsed_seconds} s.</p>`;
+    html += (r.dataset.warnings || []).map((w) => `<div class="msg">${esc(w)}</div>`).join("");
+    html += `<div class="tiles"><div class="tile"><div class="label">Block</div><div class="value">${t.block}</div></div>
+      <div class="tile"><div class="label">Review</div><div class="value">${t.review}</div></div>
+      <div class="tile"><div class="label">Allow</div><div class="value">${t.allow}</div></div></div>`;
+    if (r.evaluation) html += `<h3 style="margin-top:14px">Against the answer key</h3>${metricsTiles(r.evaluation)}${groupTable(r.evaluation.by_group)}`;
+    html += `<h3 style="margin-top:14px">Groups found</h3>`;
+    html += r.clusters.length ? r.clusters.map((g) => groupHtml(g) + `<details><summary>Signups in this group (first ${g.signups.length})</summary><div class="scroll"><table>
+      <tr><th>Time (UTC)</th><th>Email</th><th>Username</th><th>Network</th><th class="num">Risk</th></tr>${g.signups.map((s) =>
+      `<tr><td>${esc((s.time || "").replace("T", " ").replace("Z", ""))}</td><td class="wrap">${esc(s.email)}</td><td class="wrap">${esc(s.username)}</td><td>${esc(s.asn_org)}</td><td class="num">${s.risk}</td></tr>`).join("")}</table></div></details>`).join("")
+      : `<p class="hint">No groups of 5 or more linked signups.</p>`;
+    $("runOut").innerHTML = html;
+  } catch (e) {
+    $("runOut").innerHTML = `<div class="msg error">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+});
+
+async function loadEval() {
+  try {
+    const ev = await api("/api/signups/evaluation");
+    let html = "";
+    for (const [name, title] of [["standard", "Fresh simulated streams (5 seeds)"], ["hard", "Hard streams: smarter attackers (5 seeds)"]]) {
+      if (!ev[name]) continue;
+      html += `<h3 style="margin-top:12px">${title}</h3>${metricsTiles(ev[name])}${groupTable(ev[name].by_group)}`;
+    }
+    html += `<h3 style="margin-top:14px">Where it fails, honestly</h3><ul class="hint">
+      <li><b>abuse_slow_humanlike is never caught.</b> An operator who varies every detail and signs up at ordinary times looks like a real person to us. We say so instead of pretending otherwise.</li>
+      <li><b>On hard streams the nightly batch slips from block to review.</b> When the server batch spreads its signups across several night hours, the timing is no longer unusual enough to block on network evidence alone.</li>
+      <li><b>Classes and company teams go to review.</b> Correctly not blocked, but they cost a human a look. That is the price of not blocking a school.</li>
+      <li><b>A few ordinary people land in review</b> when they happen to share several uncommon details (same small provider, same rare browser build, same email shape) with others.</li></ul>`;
+    $("evalOut").innerHTML = html;
+  } catch (e) {
+    $("evalOut").innerHTML = `<div class="msg error">${esc(e.message)}</div>`;
+  }
+}
+
+$("caveats").innerHTML = [
+  "This flags patterns for a person to act on. Nothing here identifies who is behind an account.",
+  "The live demo does not look up your network provider (no IP-to-network database on the server yet), so the datacenter/VPN check only runs on the files.",
+  "Throwaway-email and hosting lists are small built-in snapshots; production needs maintained lists.",
+  "All accuracy figures come from simulated signups written by our own team.",
+].map((c) => `<li>${esc(c)}</li>`).join("");
+
+loadDatasets().catch((e) => { $("runOut").innerHTML = `<div class="msg error">${esc(e.message)}</div>`; });
+loadEval();
+</script>
+</body>
+</html>

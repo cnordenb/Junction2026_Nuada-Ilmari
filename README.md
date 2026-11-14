@@ -1,10 +1,54 @@
-# Swarm detector
+# Sargas
 
-Junction 2026, Hostinger challenge. A tool that finds groups of posts or comments that are both **similar in text** and **synchronised in time**, and types the **accounts** behind them by behaviour: the footprint of brigading, astroturfing and bot networks.
+**Sargas** (Lithuanian for *guard*) catches swarms of fake signups on free tiers and explains every verdict. Junction 2026, Hostinger challenge ("Spot the swarm", with parts of "Clean the traffic").
 
-It flags patterns for a person to review. It does not identify who is behind a post.
+Free tiers get farmed: bots open hundreds of accounts for spam, phishing and free compute. Per-request tools such as Cloudflare judge one request at a time. Sargas judges **groups of accounts**: one device behind 15 "different people", one inbox spelled ten ways, one email template, signups faster than chance. Farms that slip in are caught as the group grows, and their earlier accounts are suspended.
 
-How it works, measured accuracy and known limits: [docs/swarm-detector.md](docs/swarm-detector.md).
+## Live (Hostinger VPS)
+
+| | |
+|---|---|
+| **https://botswarm.tech** | Neighbr, a satirical "Tinder for horses" with a free tier: the site Sargas protects. Sign up and watch your own live bot score. |
+| **https://guard.botswarm.tech** | Sargas dashboard: live scores per person with every factor, swarms found, review queue, IP bans, accuracy on labelled data. |
+| **https://attack.botswarm.tech** | Attack console (demo key): launch fixed-size bot campaigns against Neighbr. |
+
+## How it decides
+
+One published equation, 18 factors, each measured from 0 to 1:
+
+    bot score = 100 / (1 + e^-z),   z = -4 + sum(weight x factor)        0-34 allow, 35-59 review, 60+ block
+
+- **Signup:** throwaway inbox, same inbox under other spellings, automation browser, hidden field filled, form filled too fast, device reused, device check missing, datacenter/VPN, machine-made name.
+- **Behaviour on the page:** no mouse/touch/typing, robotic movement or typing, natural movement (lowers the score), latency too low for a person.
+- **AI:** Liquid AI's d1-omni-600M (on the server, llama.cpp) judges whether the email looks machine-made.
+- **Group:** size of the linked group, how much of the group's shared details this signup has, group timing against 4,000 random groups, school/company group (lowers the score).
+
+Weights are set by hand and published; it is a ranking score with stated rules, not a probability. IP addresses behind 2+ blocked accounts are banned at the door (each ban can be switched off or reset).
+
+## AI where it measurably helps
+
+We benchmarked two on-server models on labelled data (`data/bench/`) and use each only where it beat the algorithm:
+
+| Job | Who | Evidence |
+|---|---|---|
+| Block / review / allow | **Algorithm** | AUC 0.90, 82% of bots, 0 of 60 people flagged. As judges, d1 flagged 17 people and LFM3-VL-2B 10. |
+| Email looks machine-made | **d1** (score factor, weight 1.0) | AUC 0.80; name/bio prompts were near chance and are not used. |
+| Ranking the review queue | **Algorithm + d1 blend** | Ranking AUC 0.90 -> 0.94, same decisions. |
+| Plain-language swarm summaries | **LFM3-VL-2B** | Reads well; shown next to the facts, never changes a verdict. |
+
+## Measured accuracy (forged logs with an answer key)
+
+10 simulated signup logs, including smarter attackers we did not tune for, and innocent look-alikes (a class on one campus IP, a company team, families on one laptop, VPN users, a newsletter rush): **0 of 16,864 real people blocked, 85.7% of bots blocked**, AUC 0.93. Known miss: a careful bot that varies every detail and replays human input. Details: [docs/signup-guard.md](docs/signup-guard.md). Demo runbook: [docs/live-demo.md](docs/live-demo.md). Decisions and dead ends: [docs/DEVLOG.md](docs/DEVLOG.md).
+
+```bash
+.venv/bin/python -m pytest                          # 69 tests (one needs a live d1 server)
+.venv/bin/python scripts/eval_signups.py            # accuracy on 10 forged logs
+python3 scripts/attack_demo.py https://botswarm.tech --key <demo key>   # attack from a laptop
+```
+
+## Also in this repository
+
+**Post swarm detector** (page `/` on a local run, details in [docs/swarm-detector.md](docs/swarm-detector.md)): Junction 2026, Hostinger challenge. A tool that finds groups of posts or comments that are both **similar in text** and **synchronised in time**, and types the **accounts** behind them by behaviour: the footprint of brigading, astroturfing and bot networks.
 
 ## Requirements
 
@@ -123,7 +167,7 @@ An `id` column is used if present; otherwise rows are numbered. Rows with empty 
 .venv\Scripts\python -m pytest
 ```
 
-41 tests covering both scores, the detector and account types on the demo dataset, and the dashboard API. They take about 40 seconds.
+Tests cover the post detector and account types (Carl), the signup guard, the live demo, the d1 prompts and the dashboard API.
 
 ## Optional: semantic mode
 

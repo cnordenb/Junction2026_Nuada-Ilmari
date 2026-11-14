@@ -198,3 +198,211 @@ def analyze(req: AnalyzeRequest) -> dict:
     report["dataset"]["name"] = name
     report["elapsed_seconds"] = round(time.time() - started, 1)
     return report
+
+
+# ================================================================ signup guard
+# Free-tier signup abuse: batch analysis of signup files in data/signups/, the
+# accuracy figures from scripts/eval_signups.py, and a live "try to sign up"
+# check. Live signups are kept in memory per browser session only, so one
+# visitor never sees another visitor's entries.
+
+import hashlib  # noqa: E402
+from collections import OrderedDict  # noqa: E402
+
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from signup_guard import analyse as analyse_signups, load_signups  # noqa: E402
+
+SIGNUP_DIR = DATA_DIR / "signups"
+DEMO_SIGNUPS = SIGNUP_DIR / "demo_signups.csv"
+TRUST_PROXY = os.environ.get("SIGNUP_TRUST_PROXY", "0") == "1"
+LIVE_MAX_SESSIONS, LIVE_MAX_PER_SESSION = 1000, 100
+_live: "OrderedDict[str, dict]" = OrderedDict()
+_live_lock = threading.Lock()
+_demo_cache: dict = {}
+
+
+def _signup_files() -> list[Path]:
+    if not SIGNUP_DIR.is_dir():
+        return []
+    return sorted(p for p in SIGNUP_DIR.iterdir()
+                  if p.is_file() and p.suffix.lower() in SUFFIXES and p.name != "evaluation.json")
+
+
+def _resolve_signups(dataset_id: str) -> tuple[Path, str]:
+    kind, _, name = dataset_id.partition(":")
+    if kind == "signups":
+        for path in _signup_files():
+            if path.name == name:
+                return path, name
+    return _resolve(dataset_id)
+
+
+@app.get("/signups")
+def signups_page() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "static" / "signups.html", media_type="text/html")
+
+
+@app.get("/api/signups/datasets")
+def signup_datasets() -> list[dict]:
+    return [{"id": f"signups:{p.name}", "name": p.name} for p in _signup_files()]
+
+
+@app.get("/api/signups/evaluation")
+def signup_evaluation() -> dict:
+    path = SIGNUP_DIR / "evaluation.json"
+    if not path.is_file():
+        raise HTTPException(404, "No evaluation yet. Run scripts/eval_signups.py.")
+    import json
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+class SignupAnalyzeRequest(BaseModel):
+    dataset_id: str
+    label_col: str | None = None
+
+
+def _public_report(report: dict, name: str) -> dict:
+    report.pop("actions", None)
+    report["dataset"]["name"] = name
+    return report
+
+
+@app.post("/api/signups/analyze")
+def signup_analyze(req: SignupAnalyzeRequest) -> dict:
+    path, name = _resolve_signups(req.dataset_id)
+    if not _busy.acquire(blocking=False):
+        raise HTTPException(429, "The server is busy with other analyses. Try again in a minute.")
+    started = time.time()
+    try:
+        su = load_signups(path, req.label_col or None, max_rows=MAX_ROWS)
+        if req.label_col:
+            frame = read_table(path)
+            if "note" in frame.columns and len(frame) == len(su.frame):
+                su.frame["note"] = frame["note"].tolist()
+        report = analyse_signups(su)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        _busy.release()
+    report = _public_report(report, name)
+    report["elapsed_seconds"] = round(time.time() - started, 2)
+    return report
+
+
+class LiveSignup(BaseModel):
+    session: str = Field(min_length=16, max_length=64, pattern=r"^[0-9a-f]+$")
+    email: str = Field(min_length=3, max_length=200)
+    username: str = Field(default="", max_length=100)
+    device_id: str = Field(default="", max_length=64)
+
+
+def _client_ip(request: Request) -> str:
+    if TRUST_PROXY:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return request.client.host if request.client else ""
+
+
+def _demo_frame() -> pd.DataFrame:
+    """The ordinary signups of the demo stream (planted abuse removed, so live
+    test signups form their own groups), shifted so the stream ends now."""
+    mtime = DEMO_SIGNUPS.stat().st_mtime
+    if _demo_cache.get("mtime") != mtime:
+        su = load_signups(DEMO_SIGNUPS, label_col="label" if "label" in read_table(DEMO_SIGNUPS).columns else None)
+        frame = su.frame
+        if su.labels is not None:
+            frame = frame[[lab == "organic" for lab in su.labels]].reset_index(drop=True)
+        _demo_cache.update(mtime=mtime, frame=frame, end=float(frame["time"].max()))
+    frame = _demo_cache["frame"].copy()
+    frame["time"] = frame["time"] + (time.time() - 60 - _demo_cache["end"])
+    return frame
+
+
+@app.post("/api/signups/live")
+def signup_live(item: LiveSignup, request: Request) -> dict:
+    if "@" not in item.email:
+        raise HTTPException(400, "That does not look like an email address.")
+    ip = _client_ip(request)
+    entry = {"id": f"live-{secrets.token_hex(4)}", "time": time.time(), "email": item.email.strip(),
+             "username": item.username.strip(), "ip": ip, "asn": "", "asn_org": "",
+             "user_agent": request.headers.get("user-agent", "")[:300], "device_id": item.device_id.strip()}
+    with _live_lock:
+        now = time.time()
+        for key in [k for k, v in _live.items() if now - v["seen"] > UPLOAD_TTL_SECONDS]:
+            _live.pop(key)
+        sess = _live.setdefault(item.session, {"rows": [], "seen": now})
+        sess["seen"] = now
+        _live.move_to_end(item.session)
+        while len(_live) > LIVE_MAX_SESSIONS:
+            _live.popitem(last=False)
+        if len(sess["rows"]) >= LIVE_MAX_PER_SESSION:
+            raise HTTPException(429, "This session has reached 100 test signups. Reset it to continue.")
+        sess["rows"].append(entry)
+        mine = list(sess["rows"])
+    if not _busy.acquire(timeout=10):
+        raise HTTPException(429, "The server is busy. Try again in a moment.")
+    try:
+        frame = pd.concat([_demo_frame(), pd.DataFrame(mine)], ignore_index=True)
+        from signup_guard import Signups
+        report = analyse_signups(Signups(frame, {}, len(frame)), sample=LIVE_MAX_PER_SESSION + 2000)
+    finally:
+        _busy.release()
+    actions = report.pop("actions")
+    offset = len(frame) - len(mine)
+    results = [{"id": row["id"], "email": row["email"], "username": row["username"],
+                "action": actions[offset + k]} for k, row in enumerate(mine)]
+    # Which group, if any, each live signup joined (the analysis keeps member
+    # indices internally; recompute membership by id from the full sample).
+    live_ids = {r["id"] for r in mine}
+    groups = []
+    for c in report["clusters"]:
+        members = [s["id"] for s in c.pop("signups") if s["id"] in live_ids]
+        if members:
+            groups.append({k: c[k] for k in ("id", "size", "action", "organisation", "evidence", "timing",
+                                             "why", "first", "last")} | {"live_members": len(members)})
+    from signup_guard import signup_signals
+    reasons = [x["reason"] for x in signup_signals(frame)[-1]]
+    return {"latest": {**results[-1], "reasons": reasons, "ip_seen": ip, "ua_seen": entry["user_agent"][:120]},
+            "session": results, "groups": groups}
+
+
+@app.delete("/api/signups/live")
+def signup_live_reset(session: str) -> dict:
+    with _live_lock:
+        _live.pop(session, None)
+    return {"ok": True}
+
+
+# ================================================================ live demo (trial site + guard dashboard)
+# Subdomains on the public server: trial.<domain> is the small-business site,
+# guard.<domain> the live dashboard. Locally, use /trial and /guard.
+
+
+import dashboard.live as live  # noqa: E402
+
+app.include_router(live.router)
+
+
+@app.on_event("startup")
+def _start_live() -> None:
+    live.start_background()
+
+
+# Hosts whose front page is the Neighbr signup (e.g. the bare domain and www).
+NEIGHBR_HOSTS = {h.strip().lower() for h in os.environ.get("NEIGHBR_HOSTS", "").split(",") if h.strip()}
+
+
+@app.middleware("http")
+async def _subdomains(request: Request, call_next):
+    host = request.headers.get("host", "").split(":")[0].lower()
+    if request.url.path == "/":
+        if host in NEIGHBR_HOSTS or host.startswith("trial."):
+            return live.trial_page()
+        if host.startswith("guard."):
+            return live.guard_page()
+        if host.startswith("attack."):
+            return live.attack_page()
+    return await call_next(request)

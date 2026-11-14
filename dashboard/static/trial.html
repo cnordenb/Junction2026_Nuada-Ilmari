@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neighbr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* A satirical horse-dating startup. Hay gold, paddock green, saddle brown. */
+:root {
+  --bg: #fff8ec; --surface: #ffffff; --fg: #2a1a0e; --fg2: #6b5340; --line: #efdcc0;
+  --hay: #f2b632; --grass: #2f9e5b; --saddle: #8a4b1f; --nope: #d94a3d; --ink-on: #2a1a0e;
+  --ok: #2f9e5b; --warn: #c98400; --bad: #d94a3d;
+  --display: "Bricolage Grotesque", "Arial Black", system-ui, sans-serif; --body: "Inter", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1a120b; --surface: #24190f; --fg: #fbefdf; --fg2: #cdb69c; --line: #3d2c1d;
+    --hay: #f5c04a; --grass: #49c07a; --saddle: #d08a54; --nope: #f06a5d; --ink-on: #1a120b;
+    --ok: #49c07a; --warn: #f0b13a; --bad: #f06a5d; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 max(18px, env(safe-area-inset-left, 0px)); }
+.ticker { background: var(--fg); color: var(--bg); font: 700 13px var(--body); white-space: nowrap; overflow: hidden; }
+.ticker span { display: inline-block; padding: 7px 0; animation: tick 38s linear infinite; }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; gap: 12px; }
+.logo { font: 800 28px var(--display); letter-spacing: -0.03em; display: flex; align-items: center; gap: 8px; }
+.logo .dot { width: 30px; height: 30px; border-radius: 9px; background: var(--hay); display: grid; place-items: center; font-size: 18px; transform: rotate(-8deg); }
+nav .pill { font: 700 13px var(--body); background: var(--grass); color: #fff; padding: 6px 12px; border-radius: 999px; }
+.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 44px; align-items: start; padding: 26px 0 50px; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; gap: 26px; padding-top: 6px; } .hero > .card { order: -1; } }
+.kicker { display: inline-block; font: 700 13px var(--body); background: var(--hay); color: var(--ink-on); padding: 5px 10px; border-radius: 6px; transform: rotate(-1.5deg); margin-bottom: 14px; }
+h1 { font: 800 clamp(38px, 6.4vw, 68px)/1 var(--display); letter-spacing: -0.035em; margin: 0 0 14px; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--saddle); }
+.lede { font-size: 19px; color: var(--fg2); margin: 0 0 8px; max-width: 32em; }
+.fine-star { font-size: 13px; color: var(--fg2); margin: 0 0 20px; }
+.deck { position: relative; height: 330px; max-width: 330px; margin-top: 8px; }
+.pcard { position: absolute; inset: 0; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(60,30,0,.14);
+  padding: 18px; display: flex; flex-direction: column; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s; }
+.pcard .pic { flex: 1; border-radius: 14px; display: grid; place-items: center; font-size: 96px; background: linear-gradient(160deg, #ffe7a8, #f7c96a); }
+.pcard h3 { font: 800 22px var(--display); margin: 10px 0 0; }
+.pcard p { margin: 2px 0 0; color: var(--fg2); font-size: 14px; }
+.pcard.out-l { transform: translateX(-130%) rotate(-18deg) !important; opacity: 0; }
+.pcard.out-r { transform: translateX(130%) rotate(18deg) !important; opacity: 0; }
+.swipes { display: flex; gap: 14px; margin-top: 14px; max-width: 330px; justify-content: center; }
+.swipes button { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); font-size: 26px; cursor: pointer; }
+.swipes .match { border-color: var(--grass); } .swipes .nope { border-color: var(--nope); }
+.toast { font: 700 15px var(--body); min-height: 22px; margin-top: 8px; color: var(--grass); max-width: 330px; text-align: center; }
+.card { background: var(--surface); border: 2px solid var(--fg); border-radius: 18px; padding: 24px; box-shadow: 8px 8px 0 var(--hay); }
+.card h2 { font: 800 28px/1.1 var(--display); margin: 0 0 4px; letter-spacing: -0.02em; }
+.card .sub { color: var(--fg2); margin: 0 0 14px; font-size: 15px; }
+label { display: block; font-size: 14px; font-weight: 700; margin: 14px 0 5px; }
+input[type=text], input[type=email] { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 2px solid var(--line); border-radius: 10px; padding: 12px; }
+input:focus-visible, button:focus-visible { outline: 3px solid var(--hay); outline-offset: 2px; }
+.submit { width: 100%; margin-top: 18px; font: 800 18px var(--display); background: var(--grass); color: #fff; border: 2px solid var(--fg); border-radius: 12px; padding: 14px; cursor: pointer; box-shadow: 4px 4px 0 var(--fg); }
+.submit:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--fg); }
+.submit:disabled { opacity: .6; cursor: wait; }
+.fine { font-size: 12.5px; color: var(--fg2); margin-top: 12px; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.result { margin-top: 16px; padding: 14px 16px; border-radius: 12px; font-weight: 700; display: none; }
+.result.allow { display: block; background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.result.review { display: block; background: color-mix(in srgb, var(--warn) 17%, transparent); color: var(--warn); }
+.result.block { display: block; background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.result.error { display: block; background: color-mix(in srgb, var(--hay) 25%, transparent); color: var(--fg); }
+.check { margin-top: 18px; border: 2px dashed var(--fg2); border-radius: 14px; padding: 16px; background: var(--bg); }
+.check[hidden] { display: none; }
+.check .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.check .ticket { font: 700 13px ui-monospace, Menlo, monospace; color: var(--fg2); }
+.check .ticket b { font-size: 18px; color: var(--fg); letter-spacing: .08em; }
+.check .score { font: 800 58px/1 var(--display); font-variant-numeric: tabular-nums; }
+.check .score small { font: 600 16px var(--body); color: var(--fg2); }
+.gauge { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--ok) 0 35%, var(--warn) 35% 60%, var(--bad) 60% 100%); position: relative; margin: 10px 0 4px; }
+.gauge i { position: absolute; top: -5px; width: 5px; height: 22px; border-radius: 2px; background: var(--fg); transition: left .6s ease; }
+.scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--fg2); }
+.check ul { margin: 10px 0 0; padding-left: 0; list-style: none; display: grid; gap: 7px; font-size: 14px; }
+.check li { display: grid; grid-template-columns: 46px 1fr; gap: 8px; }
+.check li b { font-variant-numeric: tabular-nums; text-align: right; }
+.check .live { font-size: 12px; color: var(--fg2); margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+.check .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: blink 1.6s infinite; flex: none; }
+.share { margin-top: 10px; font: 700 14px var(--body); background: var(--hay); color: var(--ink-on); padding: 8px 10px; border-radius: 8px; }
+@keyframes blink { 50% { opacity: .3; } }
+#spark { width: 100%; height: 40px; display: block; margin-top: 8px; }
+section.band { padding: 46px 0; border-top: 2px solid var(--line); }
+section.band h2 { font: 800 clamp(28px, 4vw, 40px)/1.05 var(--display); letter-spacing: -0.02em; margin: 0 0 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.feature { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.feature .em { font-size: 34px; }
+.feature h3 { font: 800 20px var(--display); margin: 6px 0 4px; }
+.feature p { margin: 0; color: var(--fg2); }
+.price { background: var(--surface); border: 2px solid var(--line); border-radius: 16px; padding: 20px; }
+.price.hot { border-color: var(--fg); box-shadow: 6px 6px 0 var(--grass); }
+.price h3 { margin: 0; font: 800 20px var(--display); }
+.price .amt { font: 800 36px var(--display); }
+.price ul { padding-left: 18px; color: var(--fg2); margin: 8px 0 0; }
+blockquote { margin: 0; background: var(--surface); border-radius: 16px; border: 1px solid var(--line); padding: 18px; font: 700 18px/1.35 var(--display); }
+blockquote cite { display: block; margin-top: 8px; font: 500 13px var(--body); color: var(--fg2); font-style: normal; }
+.logos { display: flex; flex-wrap: wrap; gap: 10px 26px; color: var(--fg2); font: 800 18px var(--display); opacity: .55; margin-top: 18px; }
+footer { border-top: 2px solid var(--line); padding: 24px 0 44px; font-size: 13px; color: var(--fg2); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+footer a { color: var(--fg2); }
+@media (prefers-reduced-motion: reduce) { .ticker span, .check .live i { animation: none; } .pcard, .gauge i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="ticker" aria-hidden="true"><span>🐴 BREAKING: local stallion gets 400 matches, all of them bots 🐴 no cap, the most stable relationship app on the internet 🐴 Neighbr Gold now includes unlimited oats 🐴 Sargas has blocked 0 real horses today (we checked) 🐴 mane character energy only 🐴 skibidi saddle 🐴 POV: you swiped right on a bot farm 🐴 BREAKING: local stallion gets 400 matches, all of them bots 🐴 no cap, the most stable relationship app on the internet 🐴 Neighbr Gold now includes unlimited oats 🐴 Sargas has blocked 0 real horses today (we checked) 🐴 mane character energy only 🐴 skibidi saddle 🐴 POV: you swiped right on a bot farm 🐴&nbsp;</span></div>
+<div class="wrap">
+  <nav><div class="logo"><span class="dot">🐴</span>Neighbr</div><span class="pill">Free tier for every foal</span></nav>
+
+  <section class="hero">
+    <div>
+      <span class="kicker">It's Tinder, but for horses. Yes, really.</span>
+      <h1>Find your <em>soulmare.</em> No cap.</h1>
+      <p class="lede">Swipe right on that stallion from the next paddock. Neighbr matches horses on vibes, hay preference and aura points. Built for horses with mane character energy.</p>
+      <p class="fine-star">Free forever.* Unlimited oats.** Zero bots.***<br><small>*until the bots find it. **one bucket, shared. ***that's literally Sargas's job.</small></p>
+      <div class="deck" id="deck" aria-label="Example horse profiles"></div>
+      <div class="swipes"><button class="nope" id="nope" aria-label="Swipe left">❌</button><button class="match" id="yes" aria-label="Swipe right">💚</button></div>
+      <div class="toast" id="toast" role="status"></div>
+    </div>
+
+    <div class="card" id="trial">
+      <h2>Join the herd 🐎</h2>
+      <p class="sub">Free account, 10 seconds. Horses only. Bots get bounced by Sargas.</p>
+      <form id="form" novalidate autocomplete="off">
+        <label for="email">Email (your human can type it)</label>
+        <input id="email" name="email" type="email" required maxlength="200" placeholder="sir.trotsalot@paddock.fi">
+        <label for="business">Your horse's name</label>
+        <input id="business" name="business" type="text" required maxlength="100" placeholder="Neigh-thaniel">
+        <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <button class="submit" id="submit" type="submit">Giddy up 🐴</button>
+        <div id="result" class="result" role="status"></div>
+        <div id="check" class="check" hidden aria-live="polite">
+          <div class="top"><span class="ticket">Your ticket <b id="ticket">····</b></span><span class="ticket" id="verdict"></span></div>
+          <div class="score"><span id="score">0</span><small> / 100 bot (aura check)</small></div>
+          <div class="gauge"><i id="needle" style="left:0%"></i></div>
+          <div class="scale"><span>real horse</span><span>sus 35</span><span>bot 60</span><span>caught in 4K</span></div>
+          <svg id="spark" viewBox="0 0 300 40" preserveAspectRatio="none" aria-label="Your score over time"></svg>
+          <ul id="parts"></ul>
+          <div class="share" id="share"></div>
+          <div class="live"><i></i><span id="liveNote">Updating live, fr fr. Find your ticket on the big screen.</span></div>
+        </div>
+        <p class="fine">Demo site for Junction 2026. No email is sent, no horse is harmed, no account is created. Use any address.</p>
+      </form>
+    </div>
+  </section>
+
+  <section class="band">
+    <h2>Why horses are switching to Neighbr</h2>
+    <div class="grid3">
+      <div class="feature"><div class="em">🥕</div><h3>Rizz-o-meter</h3><p>Our AI rates your carrot game from "NPC pony" to "unspoken rizz stallion". Accuracy unknown. Vibes immaculate.</p></div>
+      <div class="feature"><div class="em">🌾</div><h3>Touch grass, literally</h3><p>First dates happen in a field. The only dating app where touching grass is the main feature.</p></div>
+      <div class="feature"><div class="em">🛡️</div><h3>Zero bot horses</h3><p>Every signup goes past Sargas, our bouncer. 400 fake mares from one laptop? Sargas has seen that before. Instant neigh.</p></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <h2>Pricing (stable, unlike your ex)</h2>
+    <div class="grid3">
+      <div class="price"><h3>Foal</h3><div class="amt">€0</div><ul><li>5 swipes a day</li><li>1 bucket of oats (shared)</li><li>Sargas protection included</li></ul></div>
+      <div class="price hot"><h3>Neighbr Gold</h3><div class="amt">€0</div><ul><li>Unlimited swipes</li><li>Same oats, nicer bucket</li><li>You have to really mean it</li></ul></div>
+      <div class="price"><h3>Enterprise Stable</h3><div class="amt">Call us</div><ul><li>We will not pick up</li><li>We are horses</li><li>SLA: whenever</li></ul></div>
+    </div>
+  </section>
+
+  <section class="band">
+    <h2>Real horses. Real feelings.</h2>
+    <div class="grid3">
+      <blockquote>"Met my mare on Neighbr. Now we share a stable. Neigh regrets."<cite>Maregaret, 9, show jumper</cite></blockquote>
+      <blockquote>"Our startup got 4,000 signups overnight. 3,991 were bots. Sargas caught them before breakfast."<cite>Every free-tier founder, ever</cite></blockquote>
+      <blockquote>"I vibe-coded my own horse app in 11 minutes. It got 400 bot accounts in 12."<cite>A guy on X, probably</cite></blockquote>
+    </div>
+    <div class="logos" aria-label="Trusted by (satire)"><span>0 Fortune 500 companies</span><span>your mum</span><span>a Discord server</span><span>one (1) pony club</span><span>the Ohio Stable Authority</span></div>
+  </section>
+
+  <footer><span>Neighbr is a fictional horse-dating startup made for a Junction 2026 demo. This page was vibe-coded in 11 minutes. The bot detection was not.</span>
+    <a id="guardLink" href="/guard">Bouncer: Sargas (Lithuanian for "guard"). Watch it live →</a></footer>
+</div>
+<script>
+// Example horse profiles for the swipe deck (made up, purely for laughs).
+const HORSES = [
+  ["🐴", "Sir Trots-a-Lot, 7", "Looking for a stable relationship. Sigma stallion. 16 hands of pure aura."],
+  ["🦄", "Maregaret, 9", "Unicorn by vibes, horse by paperwork. Delulu is the solulu."],
+  ["🐎", "Neigh-thaniel, 5", "Gym horse. Mewing since foal. Will race you for your carrot."],
+  ["🐴", "Hay Girl Hay, 6", "It's giving pasture princess. Swipe left if you're a donkey."],
+  ["🐎", "Galloping Gary, 11", "Ex-racehorse, now in my soft era. Aura points: unlimited."],
+  ["🦓", "Zeb, 4", "Technically not a horse. Please don't tell Sargas."],
+];
+let hi = 0;
+const deck = document.getElementById("deck");
+function drawDeck() {
+  deck.innerHTML = "";
+  for (let k = 2; k >= 0; k--) {
+    const h = HORSES[(hi + k) % HORSES.length];
+    const el = document.createElement("div");
+    el.className = "pcard";
+    el.style.transform = `translateY(${k * 8}px) scale(${1 - k * 0.04})`;
+    el.style.zIndex = 10 - k;
+    el.innerHTML = `<div class="pic">${h[0]}</div><h3>${h[1]}</h3><p>${h[2]}</p>`;
+    deck.appendChild(el);
+  }
+}
+function swipe(dir) {
+  const top = deck.lastElementChild;
+  if (!top) return;
+  top.classList.add(dir === "r" ? "out-r" : "out-l");
+  const name = HORSES[hi % HORSES.length][1].split(",")[0];
+  document.getElementById("toast").textContent = dir === "r"
+    ? ["It's a match! 💚 Rizz confirmed.", `${name} said yes. Neigh-ver been happier.`, "Mane character moment. Match!"][hi % 3]
+    : ["Left swipe. Brutal. No cap.", `${name} has been left on read. In the stable.`, "Not your vibe. Valid."][hi % 3];
+  setTimeout(() => { hi++; drawDeck(); }, 380);
+}
+document.getElementById("yes").onclick = () => swipe("r");
+document.getElementById("nope").onclick = () => swipe("l");
+drawDeck();
+
+// Signals Sargas uses: a device check, how long the form took, the browser's
+// automation flag, and a hidden field people never fill in.
+let firstTouch = null;
+
+// ---- Behaviour summary for Sargas. Only counts and statistics leave the page,
+// never the pointer path itself.
+const B = {pts: [], moves: 0, touches: 0, keys: 0, keyTimes: [], rtts: []};
+document.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return;
+  B.moves++;
+  if (B.pts.length < 600) B.pts.push([performance.now(), e.clientX, e.clientY]);
+}, {passive: true});
+document.addEventListener("touchstart", () => { B.touches++; }, {passive: true});
+document.addEventListener("touchmove", () => { B.touches++; }, {passive: true});
+document.addEventListener("keydown", () => { B.keys++; if (B.keyTimes.length < 300) B.keyTimes.push(performance.now()); });
+const cv = (a) => { if (a.length < 2) return 0; const m = a.reduce((x, y) => x + y, 0) / a.length; if (!m) return 0;
+  return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) / m; };
+function behaviour() {
+  // Split the pointer trail into strokes at pauses over 300 ms.
+  let strokes = [[]], pauses = 0;
+  for (let i = 0; i < B.pts.length; i++) {
+    if (i && B.pts[i][0] - B.pts[i - 1][0] > 300) { pauses++; strokes.push([]); }
+    strokes[strokes.length - 1].push(B.pts[i]);
+  }
+  let path = 0, disp = 0; const speeds = [];
+  for (const st of strokes) {
+    if (st.length < 3) continue;
+    for (let i = 1; i < st.length; i++) {
+      const d = Math.hypot(st[i][1] - st[i - 1][1], st[i][2] - st[i - 1][2]), dt = st[i][0] - st[i - 1][0];
+      path += d; if (dt > 0) speeds.push(d / dt);
+    }
+    disp += Math.hypot(st[st.length - 1][1] - st[0][1], st[st.length - 1][2] - st[0][2]);
+  }
+  const gaps = B.keyTimes.slice(1).map((t, i) => t - B.keyTimes[i]).filter((g) => g < 2000);
+  const rtts = B.rtts.slice().sort((a, b) => a - b);
+  const r = (v, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
+  return {moves: B.moves, touches: B.touches, keys: B.keys, straight: path > 0 ? r(Math.min(1, disp / path)) : 0,
+    speed_cv: r(cv(speeds)), pauses, key_cv: r(cv(gaps)),
+    rtt: rtts.length ? r(rtts[Math.floor(rtts.length / 2)], 1) : null, jitter: rtts.length ? r(rtts[rtts.length - 1] - rtts[0], 1) : null,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || null, tz_offset: -new Date().getTimezoneOffset()};
+}
+// Background pings: three tiny requests to measure round-trip time.
+(async () => {
+  for (let k = 0; k < 3; k++) {
+    const t0 = performance.now();
+    try { await fetch("/api/ping", {cache: "no-store"}); B.rtts.push(performance.now() - t0); } catch (e) {}
+    await new Promise((res) => setTimeout(res, 700));
+  }
+})();
+const form = document.getElementById("form");
+form.addEventListener("focusin", () => { if (firstTouch === null) firstTouch = performance.now(); });
+form.addEventListener("keydown", () => { if (firstTouch === null) firstTouch = performance.now(); });
+
+// A random ID kept in this browser, so two identical phones (same model, OS,
+// language, timezone) are still two devices. The same phone signing up again
+// keeps its ID, so device reuse is still caught. Private windows get a new one.
+function browserId() {
+  try {
+    let v = localStorage.getItem("neighbrDevice");
+    if (!v) { v = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join(""); localStorage.setItem("neighbrDevice", v); }
+    return v;
+  } catch (e) { return ""; }
+}
+
+async function deviceId() {
+  const c = document.createElement("canvas");
+  let canvasSig = "";
+  try {
+    const g = c.getContext("2d"); c.width = 200; c.height = 40;
+    g.textBaseline = "top"; g.font = "16px Arial"; g.fillStyle = "#8a4b1f"; g.fillText("Neighbr 2026", 4, 8);
+    canvasSig = c.toDataURL().slice(-64);
+  } catch (e) {}
+  const parts = [navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
+    screen.colorDepth, devicePixelRatio, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency,
+    navigator.platform, navigator.maxTouchPoints, canvasSig, browserId()];
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
+  return Array.from(new Uint8Array(buf).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+let mine = null, pollTimer = null;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const VERDICT = {allow: "certified real horse 🐴", review: "kinda sus 👀", block: "bot detected 🤖"};
+function vibe(score) {
+  if (score < 10) return `Sargas rated me ${score}/100 bot. Certified real horse. Aura +1000.`;
+  if (score < 35) return `Sargas rated me ${score}/100 bot. Lowkey sus but still a real horse.`;
+  if (score < 60) return `Sargas rated me ${score}/100 bot. The bouncer is side-eyeing me fr.`;
+  return `Sargas rated me ${score}/100 bot. Caught in 4K.`;
+}
+function showCheck(d) {
+  const box = document.getElementById("check"); box.hidden = false;
+  document.getElementById("ticket").textContent = d.ticket || "····";
+  document.getElementById("score").textContent = d.score ?? 0;
+  document.getElementById("needle").style.left = `calc(${Math.min(100, d.score || 0)}% - 2px)`;
+  document.getElementById("verdict").textContent = VERDICT[d.action] || "";
+  document.getElementById("share").textContent = vibe(d.score ?? 0);
+  const parts = d.parts || [];
+  document.getElementById("parts").innerHTML = parts.length
+    ? parts.map((p) => `<li><b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b><span><strong>${esc(p.label || "")}</strong> (${Number(p.x).toFixed(2)} × ${p.weight}). ${esc(p.reason)}</span></li>`).join("")
+      + `<li><b>−4.0</b><span>Everyone starts here. Score = 100 / (1 + e<sup>−z</sup>), z = ${(-4 + parts.reduce((a, p) => a + p.contribution, 0)).toFixed(1)}</span></li>`
+    : `<li><b>−4.0</b><span>No red flags, so z = −4 and you stay a real horse. Sargas checks shared devices, inboxes, email patterns, form speed, a hidden field, network and group timing.</span></li>`;
+  const hist = d.history || [];
+  if (hist.length) {
+    const t0 = hist[0][0], t1 = Math.max(d.now || hist[hist.length - 1][0], t0 + 1);
+    let pts = [], prev = null;
+    for (const [t, v] of hist) { const x = 300 * (t - t0) / (t1 - t0); if (prev !== null) pts.push(`${x},${40 - prev * 0.36}`); pts.push(`${x},${40 - v * 0.36}`); prev = v; }
+    pts.push(`300,${40 - prev * 0.36}`);
+    document.getElementById("spark").innerHTML = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--saddle)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  }
+}
+async function pollMine() {
+  clearTimeout(pollTimer);
+  if (!mine) return;
+  try {
+    const res = await fetch(`/api/trial/status?id=${encodeURIComponent(mine.id)}&token=${encodeURIComponent(mine.token)}`, {cache: "no-store"});
+    if (res.status === 404) { document.getElementById("liveNote").textContent = "This signup was cleared (the demo was reset)."; return; }
+    if (res.ok) showCheck(await res.json());
+  } catch (e) {}
+  pollTimer = setTimeout(pollMine, 2000);
+}
+
+const host = location.hostname;
+if (host.includes(".") && !/^[\d.]+$/.test(host) && host !== "localhost")
+  document.getElementById("guardLink").href = location.protocol + "//guard." + host.replace(/^(www|trial)\./, "");
+
+form.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const out = document.getElementById("result"), btn = document.getElementById("submit");
+  const email = document.getElementById("email").value.trim(), horse = document.getElementById("business").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { out.className = "result error"; out.textContent = "Please enter a valid email address, bestie."; document.getElementById("email").focus(); return; }
+  if (!horse) { out.className = "result error"; out.textContent = "Your horse needs a name. No nameless horses on Neighbr."; document.getElementById("business").focus(); return; }
+  out.className = "result"; btn.disabled = true; btn.textContent = "Sargas is checking your vibe…";
+  try {
+    const res = await fetch("/api/trial/signup", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email: document.getElementById("email").value, business: document.getElementById("business").value,
+        website: document.getElementById("website").value, device_id: await deviceId(),
+        fill_ms: firstTouch === null ? 0 : Math.round(performance.now() - firstTouch), webdriver: !!navigator.webdriver, behaviour: behaviour()})});
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Something went wrong. Neigh-ver mind, try again.");
+    out.className = "result " + body.action; out.textContent = body.message;
+    if (body.token) { mine = {id: body.id, token: body.token}; showCheck(body); pollMine(); }
+    if (body.action === "allow") form.reset();
+    firstTouch = null; B.pts = []; B.moves = 0; B.touches = 0; B.keys = 0; B.keyTimes = [];
+  } catch (e) {
+    out.className = "result error"; out.textContent = e.message;
+  } finally { btn.disabled = false; btn.textContent = "Giddy up 🐴"; }
+});
+</script>
+</body>
+</html>

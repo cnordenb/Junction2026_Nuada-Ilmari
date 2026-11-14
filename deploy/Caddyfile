@@ -1,0 +1,10 @@
+# Every hostname in SITE_HOSTS gets an HTTPS certificate automatically once its
+# DNS record points here. Set it in deploy/.env, e.g.
+#   SITE_HOSTS=example.com, www.example.com, guard.example.com, attack.example.com
+{$SITE_HOSTS} {
+	encode gzip
+	header -Server
+	reverse_proxy app:8000 {
+		header_up X-Forwarded-For {remote_host}
+	}
+}

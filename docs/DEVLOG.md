@@ -47,6 +47,123 @@
 **14:35:13** Added `README.md` at the repository root: requirements, setup, running the dashboard and scripts, dataset format, tests, optional semantic mode, Docker deployment and settings, troubleshooting.
 - Note: Python requirement stated as 3.12 because that is the only version tested.
 
+**14:48:07** Team decision (from Tom, after talking to Hostinger): focus on preventing free tiers from being exploited by bot networks and astroturfing. Hostinger closed its free hosting brand (000webhost) in 2024; the mentor reacted positively to the idea. Started the signup version of the swarm detector on branch `signup-guard`.
+- Decision: reuse the team's synchrony scorer (`sync_score.py`) for group timing; replace text similarity with weighted shared signup details (device, real inbox, email and username pattern, browser build, IP, /24, ASN).
+- Decision: details shared by more than 3% of signups are ignored for linking (gmail.com, current Chrome, big ISPs are not evidence).
+- Decision: network evidence is weak on purpose (VPN users, offices, schools). Blocking needs shared identity details plus unusual timing, or high per-signup risk.
+- Decision: a shared organisation email domain without shared devices or inboxes is treated as a school or company: review, never block.
+- Decision: a member of a blocked group is blocked only if it carries the group's evidence itself; looser members go to review. Before this, one ordinary person who happened to share an email pattern was blocked with the nightly batch.
+- Decision: the built-in throwaway-domain and hosting-ASN lists are small hand-typed snapshots so the demo works offline; `SIGNUP_DISPOSABLE_FILE` loads a maintained list. Nothing was downloaded.
+- Fix in the simulator: ordinary people now always get unique inboxes after Gmail normalisation. Before, the generator gave two different people `inesjones@gmail.com` and `ines.jones@gmail.com`, which Gmail would never do, and the inbox-reuse check flagged them.
+
+**15:09:04** Added `data/make_signup_data.py` (simulated stream with 5 abuse campaigns, 5 innocent look-alike types, answer key; `--hard` for attackers using tricks the detector was not tuned on), `scripts/signup_guard.py`, `scripts/signup_lists.py`, `scripts/eval_signups.py`, the `/signups` page and `/api/signups/*` endpoints, `tests/test_signups.py` (15 tests; 50 total passing), `docs/signup-guard.md`, a link from the post-swarm page.
+- Result, 5 fresh streams: block precision 100%, recall 85.7%, 0 of 16,864 real people blocked, 1.52% sent to review (mostly the class and company traps).
+- Result, 5 hard streams: block precision 100%, recall 73.7%; the nightly batch drops to review when spread over several hours.
+- Known miss, by design: `abuse_slow_humanlike` (an operator who varies every detail) is never caught.
+- Live demo: each browser session's test signups are added to the demo's ordinary signups and re-analysed (~0.5 s); stored in memory only, per session, deleted after 2 hours.
+- Note: developed on macOS with Python 3.15 (only 3.15 and 3.11 available locally); pinned requirements installed and all tests pass.
+- Not done: not deployed; Docker image still not built; no real signup data; live demo has no IP-to-network lookup.
+- Question: should `/` show the signup guard instead of the post detector, now that it is the main direction?
+- Question: can Hostinger share any (anonymised) signup or abuse data to evaluate on?
+
+**15:51:29** Built the live demo for the in-person review (request from Tom: a normal small-business site with a free trial, attacked live, plus a dashboard of the whole event; not static).
+- Added `dashboard/live.py`: trial signup API, SQLite store, re-judging of the recent stream on every signup (so a farm is caught as it grows and earlier accounts are suspended), background simulated customers, dashboard state, demo reset. `dashboard/static/trial.html` (fictional "Ruska Bookings"), `dashboard/static/guard.html` (live dashboard, polls every 1.2 s), `scripts/attack_demo.py` (standard library only; campaigns naive-bot, alias-farm, stealth-farm, humanlike), `tests/test_live.py` (8 tests; 58 total passing), `deploy/` (Docker Compose with Caddy for HTTPS on the bare domain and the trial and guard subdomains, plus a deploy script), `docs/live-demo.md`.
+- Decision: subdomains `trial.` and `guard.` are served by the same app (routing by Host header), so one container and one database.
+- Decision: the trial form collects live-only signals: hidden honeypot field, time to fill the form, `navigator.webdriver`, a device hash including a canvas drawing. Added to `signup_guard.py` as honeypot (60), webdriver (50), fast fill under 1.5 s (30). No password field.
+- Decision: the attack script labels its requests with `X-Demo-Truth` (needs `GUARD_DEMO_KEY`) for the scoreboard only; the detector never sees it. Reasons are returned only to labelled attack requests, never to ordinary visitors.
+- Decision: a blocked group's member must carry one of the group's identity details (device, inbox, email pattern, throwaway, automation) to be blocked. Found in testing: a real visitor on the attacker's IP and browser was blocked with the farm. Simulated evaluation numbers are unchanged.
+- Decision: emails are masked on the dashboard; live signups stay in a SQLite file on the server until reset.
+- Built the Docker image for the first time (locally) and attacked the running container: 27 of 27 attack signups blocked, simulated customers allowed.
+- Local run of the full attack: naive-bot 12/12 blocked at signup; alias-farm 6 blocked at signup, all 10 in the end; stealth-farm 11 blocked at signup, 4 caught afterwards; humanlike 6 review only because all attacks share one IP.
+- Not done: deployment. Waiting for the Hostinger account and domain.
+- Question: which domain name, and who holds the VPS login?
+
+**17:26:24** Judges' feedback (via Tom): scoring every user with a stated reason, on the forged bot activity logs, counts as testing. They want live per-user scores on the dashboard, and people on their phones should see their own score change live.
+- Added a bot score (0 to 100) per signup in `signup_guard.py`: the stronger of the per-signup points and the group verdict (block 90, review 55, organisation 40). Every point comes with its reason. Documented as a ranking score with stated rules, not a calibrated probability.
+- Added a graded signal: 2 to 4 accounts on one device score 5 points per extra account (families share devices, so it stays weak). 5 or more is the existing device-farm signal.
+- `eval_signups.py` now measures the score on the 10 forged logs: AUC 0.92 (standard and hard), with no real people at 70 or more (0 of 16,864). At 70 or more, 85.7% of bots (hard logs: 73.7%). Mean score per group is in the table; the human-like operator scores 0, like real people.
+- Live demo: every signup gets a 4-character ticket and a private token. The trial page shows "your live bot score", with reasons, a gauge and a history line, polling every 2 s (`/api/trial/status`). The dashboard lists people by ticket with live scores and points per reason, a live score histogram by source, and the forged-log test results.
+- Decision: `GUARD_SHOW_SCORE=1` (default) shows people their own score and reasons for the demo. A real site would turn it off, because it teaches attackers what is checked.
+- Tests: 61 passing.
+
+**18:19:02** Deployed to the Hostinger VPS (179.67.199.198, Ubuntu 26.04, Docker 29 already installed) with `deploy/docker-compose.yml` from `/opt/botswarm`.
+- Access with a dedicated SSH key (Tom installed it with ssh-copy-id); no password used by the agent. The root password was shared in chat and should be changed.
+- The demo key lives in `deploy/.env` on the server and locally (git-ignored).
+- Domain botswarm.site shows Active in hPanel but the .site registry has no delegation yet (WHOIS: available; Let's Encrypt: NXDOMAIN). Caddy was paused to avoid Let's Encrypt failure limits.
+- Decision: serve on `179-67-199-198.sslip.io` meanwhile (wildcard DNS to the server's IP), with real Let's Encrypt certificates. Live now: https://trial.179-67-199-198.sslip.io and https://guard.179-67-199-198.sslip.io. A watcher on Tom's Mac switches Caddy to botswarm.site once all three names resolve.
+- Tested from outside over the internet: attack from this Mac, 27 of 27 attack signups blocked (4 caught after signup), 11 of 11 simulated customers allowed; dashboard updated live. Also tested inside the container: 37 of 37. Live data reset afterwards.
+- Question: why has botswarm.site not reached the registry? Ask the Hostinger booth if it is still missing.
+
+**18:29:14** Demo setup for the peer review (Tom): three pages, only real people plus a bot swarm launched on demand.
+- Added the attack console (`dashboard/static/attack.html`, `/attack`, `attack.<domain>`): unlock with the demo key, launch one campaign at a time (naive-bot 12, alias-farm 10, stealth-farm 15, humanlike 6 signups), see each verdict, score and reason, stop, reset. The server runs the campaign and posts to its own public signup API over HTTP; each launch sends a fixed number and stops.
+- Decision: simulated customers switched off in production (`GUARD_SIM_EVERY=0`), so the dashboard shows only real visitors and the launched swarm. The two-week simulated history stays as the timing baseline only and is no longer shown as users; the dashboard says so.
+- Dashboard: the score formula replaces the simulated-customer tile.
+- Deployed: https://trial.179-67-199-198.sslip.io, https://guard.179-67-199-198.sslip.io, https://attack.179-67-199-198.sslip.io (Caddy now also serves `attack.`). Live check: naive-bot 12 of 12 blocked at score 100, no simulated users; reset to 0 afterwards. Tests: 62 passing.
+- Note: if botswarm.site starts resolving, an `attack` A record is also needed.
+
+**18:37:01** Replaced the step-like score with a graded equation (request: more visual decision logic, not just 0 or 90/100).
+- bot score = 100 / (1 + e^-z), z = -4 + sum(weight x factor), 13 factors each measured 0 to 1: throwaway inbox 3.0, same inbox 3.5, automation 4.0, hidden field 5.0, fast fill 2.0, device reuse 3.0, device check missing 1.0, datacenter/VPN 0.8, machine-made name 0.8, group size 1.5, matches group's shared details 2.0, group timing 2.5, school/company group -3.0. Weights set by hand, not fitted. Action from the score: 60+ block, 35-59 review.
+- Group factors are scaled by how well each signup matches the group's evidence (device, inbox, throwaway, automation weigh 1.0; browser 0.6; IP 0.5; email pattern, /24, ASN 0.4). Without this, 31 ordinary people sharing a common email shape were blocked with the nightly batch.
+- Forged logs: standard 0 of 16,864 people blocked, 85.7% of bots blocked, 0.08% of people sent to review; hard logs 0 blocked, 85.7% of bots blocked (was 73.7%). AUC 0.93. Classroom and company teams are now allowed (mean scores 25 and 15) instead of sent to review.
+- Dashboard shows the equation and weights (from the model, not typed into the page) and each person's factor contributions; the phone shows factor x weight = contribution and z.
+- Not done (Tom asked to skip, to save credits): unit tests not rerun (the old test expecting classes and companies in review will now fail) and not deployed. Deploy: rsync to /opt/botswarm, then docker compose up -d --build.
+
+**19:17:43** Rebrand for the peer review (team decision): the product is now **Sargas** (Lithuanian for "guard"); the demo signup page is **Neighbr**, a satirical horse-dating startup ("Tinder, but for horses", original name, no Tinder branding) with brainrot copy, a swipe deck of joke horse profiles, satirical pricing and testimonials, a shareable "Sargas rated me N/100 bot" line, and the same signals and live score card underneath. Verdict messages rewritten in the same voice. Deployed and reset; tests not rerun (to save credits).
+
+**19:34:48** IP ban list (request from Tom). An IP is banned automatically after 2 blocked accounts (`GUARD_BAN_AFTER`), so one person on a shared mobile network does not ban everyone; banned IPs are refused at the signup door with no scoring. The dashboard lists bans (bot accounts, refusals since, reason) with an ON/OFF switch each (demo key needed); a ban switched off stays off. Real visitors IPs are shown without the last part. Console bots now use documentation-only source IPs (RFC 5737): naive-bot one cloud IP (banned fast), alias-farm 3 IPs, stealth-farm and humanlike rotate like residential proxies, which shows why IP bans alone cannot stop farms. Reset also clears bans. Deployed and reset; full tests not rerun.
+
+**19:44:44** Ban toggles: removed the demo key (by request; anyone on the dashboard can switch bans). Found in use: switching a ban OFF lets the IP back in, but its earlier blocked signups still count (e.g. device reused 5 times), so the person is blocked again by score. Added a per-IP Reset (click twice): removes the ban and deletes that IP's earlier signups, then re-judges. Deployed; tests not rerun.
+
+**19:59:19** Fixed the score's logic issues found in review, and added a live equation visual to the dashboard.
+- Device ID on the Neighbr page now includes a random ID kept in the browser, so two identical phones are two devices (before, same-model iPhones could collide and look like a device farm).
+- Correlated evidence damped: inside a group, device reuse and same-inbox count half (the group factors already include them).
+- Group size and timing now count only through identity details (device, inbox, throwaway, automation, email pattern) or a datacenter network, not a shared home or venue wifi.
+- Organisation discount now also requires no generated email pattern and no automation browser.
+- The first account on a reused inbox counts half for that factor.
+- Labelled everywhere as a ranking score from stated rules, not a probability.
+- Forged logs after the fixes: standard and hard both 0 of 16,864 people blocked and 0 sent to review; 85.7% of bots blocked; AUC 0.93 / 0.92.
+- Dashboard: "How Sargas decides, live": the equation with every term, the active terms lit with their values for the selected signup; a waterfall of contributions from -4 to z with the review and block lines; the logistic curve with every live signup placed on it. Click a ticket or a person row to select.
+- Deployed and reset; unit tests not rerun.
+
+**20:13:58** Tom rolled back the previous session's changes (commit f218eb3: score-logic changes and the 2D "How Sargas decides" panel) because he did not want them; committed that rollback. Added only a typeset equation panel "The formula" to the dashboard (KaTeX from cdnjs): bot score = 100/(1+e^-z) and z with all 13 weighted terms, coloured by signup / group / lowers-the-score, built from the live model weights, plus a worked example with the newest scored signup's numbers. No graphs changed. Deployed; tests not rerun.
+
+**20:36:30** Behaviour factors (request from Tom: mouse and phone movement, latency pings, timezone, natural movement should lower the score, hashing).
+- The Neighbr page now sends a behaviour summary with each signup: pointer moves, touches, key presses, path straightness, speed variation, pauses, typing-rhythm variation, background-ping round-trip time and jitter, browser timezone. Counts and statistics only; the pointer path never leaves the page.
+- Four new factors (17 total): no mouse/touch/typing at all +1.5; robotic movement or typing +2.0 (straight constant-speed paths, perfectly even key intervals); natural movement and typing -1.5 (wobbly, paused movement, uneven typing); latency under 4 ms +0.5.
+- Console bots now carry behaviour: alias-farm none (script fill), stealth-farm robotic input from near our server, humanlike replays human-looking input (still a deliberate miss).
+- Decision: no country-based penalty (it would block real people for where they live). The defensible signal is a mismatch between browser timezone and IP location; it needs an IP-to-location database (a download, not done yet). Timezone is collected and stored for it.
+- Forged logs carry no behaviour data, so those results are unchanged (0 people blocked, 85.7% bots); the new factors are only exercised by live signups and the console.
+- Hashing: device ID is a SHA-256 hash; emails and IPs are stored in plain text on the VPS (not changed).
+
+**21:14:06** Domain is **botswarm.tech** (not botswarm.site). https://botswarm.tech and www now serve the Neighbr signup (`NEIGHBR_HOSTS`); guard.botswarm.tech and attack.botswarm.tech are added to Caddy automatically once their A records resolve. Caddy now takes a host list (`SITE_HOSTS`), so the sslip.io addresses stay up as a backup. Pages link to each other by domain (bare domain for Neighbr, trial. on sslip.io).
+
+**21:45:01** AI factor: Liquid AI **d1-omni-600M** decision model (GGUF Q8_0) runs on the VPS in llama.cpp's server (`ghcr.io/ggml-org/llama.cpp:server`, service `llm`, internal only), answering typed questions in one pass with calibrated probabilities via `/v1/systemone` (no generated text). About 0.3 s per signup on 2 vCPU.
+- Probed questions on known real and bot signups. "Is this signup fake?" separated poorly (a mailinator bot scored 0.26, below a real person at 0.30); "throwaway domain?" was useless (our list covers it). Kept two: P(email looks machine-made) and P(horse name is a username, full name or spam). Bots 0.86-1.00 on at least one; real people mostly under 0.3 (one real email scored 0.63).
+- Factor 18, "AI model (d1): looks machine-made", weight +1.5: max of the two, counted above 0.5 and rescaled to 0-1. Asked once at signup and stored, so re-judging stays fast; fail-open (2.5 s timeout, factor left out if the model is down). Data stays on the server. On its own it cannot block (verified live: a spam horse name scored 9, allowed).
+- Model licence: LFM Open License v1.0 (lfm1.0); fine for a hackathon demo, check before any commercial use.
+- Not done: d1 is not part of the forged-log evaluation (the logs were scored without it).
+
+**21:46:48** Tests: 63 passing. The 3 failures were stale tests, not bugs: two shared one IP across all test signups and hit the IP ban added later (tests now give each signup its own documentation-range IP); one expected schools and companies in review, but the graded score allows them (now checks they are never blocked). Added a test for the IP ban: banned after 2 blocked accounts, switch-off lets the IP in, reset removes the ban. Tests run without the d1 model (D1_URL unset), so its factor is skipped there.
+
+**22:08:02** Prompt benchmark for d1 (`scripts/bench_d1.py`, results in `data/bench/d1_benchmark.json`). Small mixed set by request: 40 bots + 40 people from each of two datasets, 160 examples, about 1.3 s each.
+- Datasets: Hugging Face **airt-ml/twitter-human-bots** (CC-BY-SA-3.0, real accounts labelled human/bot; username + bio) and our forged signups (email + username). Also a "mixed" score across both.
+- Results (AUC): production email prompt 0.80 on our signups (best). Name/bio prompts near chance: Twitter 0.50-0.61, signups 0.57-0.70, mixed 0.56-0.60. Note: with 40 per class each AUC is about +/-0.1.
+- Decision: the d1 factor is now email-only (production name prompt dropped) and its weight lowered from 1.5 to 1.0, because the email prompt still flags some real people at P >= 0.5. Factor reads "AI model (d1): email looks machine-made".
+- Added `tests/test_prompts.py`: production prompts are valid d1 questions; the benchmark tests the exact production prompt; factor maths; weight cap; fail-open when the model is down; a live regression set of 12 labelled emails that must keep AUC >= 0.7 (skipped without D1_URL; passed against the live server). Tests: 68 passed, 1 skipped locally.
+
+**22:32:52** AI judges over all of Sargas's evidence (request: hook all factors into the model, smart prompting). Benchmarked on the same 120 forged signups (60 bots, 60 people: half ordinary, half traps). Results in `data/bench/d1_meta_benchmark.json` and `data/bench/lfm3_benchmark.json`.
+- d1-omni-600M over the evidence (`scripts/d1_meta.py`; questions: bot yes/no with both sides defined, kind of signup, risk): AUC 0.71, 78% of bots, but 17 of 60 people flagged; picks "account_farm" for nearly everything. Blend with the algorithm: AUC 0.94 (better ranking), same decisions (80% bots, 0 people).
+- LFM3-VL-2B Q4_K_M (`scripts/lfm_judge.py`, service `lfm`): native thinking took 15-20 s and gave every case P = 0.95; switched thinking off, used a 5-step verdict label instead of a probability, three worked examples, JSON schema (reason, verdict, kind). Looked perfect on 4 hand cases (3 s each) but on the benchmark: AUC 0.55, 40% of bots, 10 of 60 people flagged; it called the account farms "shared_device" (copying the family example). Blend with the algorithm is worse than the algorithm alone.
+- Algorithm alone on the same set: AUC 0.90, 82% of bots, 0 people flagged.
+- Decision: neither model changes the score. The algorithm stays the judge. Lesson worth telling judges: hand-picked test cases flattered the LLM; the labelled benchmark did not.
+
+**22:47:07** Finishing pass before submission.
+- Identical-phone fix: the Neighbr device hash now includes a random ID kept in the browser (localStorage), so two same-model phones are two devices; the same phone signing up again is still recognised.
+- AI where it measured better, now built: a background worker asks d1 for a second opinion over all the evidence on each signup (redone when the score moves 10+) and LFM3-VL-2B for a plain-language summary of each swarm (under 40 words, exact numbers). Dashboard: "Review queue: algorithm + AI ranking" (score blended with d1; never changes a verdict), "AI n% bot" on each person, "AI summary (LFM3)" on each swarm. Verified live: farm accounts 73-91% bot, a real phone signup 27%; first summary accurate except it said one device (it was three), so the prompt now asks for exact numbers.
+- README rewritten for Sargas, Neighbr and botswarm.tech (what it does, the equation, AI-vs-algorithm table, accuracy, live URLs). Demo runbook rewritten. Submission draft in docs/SUBMISSION.md.
+- Tests: 68 passed, 1 skipped (live-model test).
+- Note: Python requirement stated as 3.12 because that is the only version tested.
+
 **16:02:20** Added account types to the swarm detector, rebuilt the dashboard around tabs, and wrote a plan for real-time AI integration.
 - Request (from the user): show output more pedagogically (less scrolling, more tabs, more kinds of graph), focus on account type for bot detection, and outline real-time AI integration and automation in rainstorm.md as a plan only.
 - Assumption, not confirmed with the user: "account type" means a behaviour-based type worked out from an optional account column, not a type supplied by a platform (verified, business, and so on).
@@ -77,3 +194,5 @@ o_pause, epetition, swarm) and seven types. Flagged types: automated-looking, r
 - Mutation testing is NOT done. Run 1 was invalid: 530 of 578 mutants "survived" because tests and `dashboard/app.py` found the code with `Path(__file__).resolve()`, which follows the mutation worker's symlinks back to the unmutated files. Changed to `.absolute()` in `tests/test_swarm.py`, `tests/test_cli.py`, `dashboard/app.py`; a three-mutant trial was then killed. Run 2 (all 578 sites) was stopped by Claude Code because the machine ran low on memory; it produced no results.
 - Not rerun after the `.absolute()` change: full pytest suite, golden comparison, crapper, dryer.
 - Open: rerun mutation testing with fewer workers (`--max-workers 3` or so) when memory allows; add `.metrics/` and `target/` to `.gitignore`; update test counts in README and docs.
+
+**22:49:53** Merged main (Carl: account types, tabbed post dashboard) into signup-guard. Conflicts: index.html took Carl's version; README keeps the Sargas front page with Carl's post-detector description below; DEVLOG keeps both sets of entries. Added pytest.ini (testpaths = tests) because main tracks target/ (422 files from mutation testing) whose copied tests broke plain `pytest`. Result: 92 passed, 1 skipped, 1 failed: Carl's test_demo_generator_reproduces_the_committed_dataset fails on macOS only because the generator writes CRLF line endings and the committed CSV has LF (not a logic bug; left for Carl).

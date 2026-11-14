@@ -1,0 +1,52 @@
+# Live demo on the Hostinger VPS: the app plus Caddy for HTTPS on three hostnames.
+#   DOMAIN=example.com GUARD_DEMO_KEY=... docker compose -f deploy/docker-compose.yml up -d --build
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    environment:
+      GUARD_DEMO_KEY: ${GUARD_DEMO_KEY:?set GUARD_DEMO_KEY}
+      GUARD_SIM_EVERY: ${GUARD_SIM_EVERY:-20}
+      SIGNUP_TRUST_PROXY: "1"            # Caddy overwrites X-Forwarded-For, so it can be trusted
+      NEIGHBR_HOSTS: ${NEIGHBR_HOSTS:-}   # hosts whose front page is the Neighbr signup
+      D1_URL: http://llm:8080             # Liquid AI d1-omni-600M decision model (service below)
+      LFM_URL: http://lfm:8080            # Liquid AI LFM3-VL-2B, AI second opinion (service below)
+    volumes:
+      - guard-data:/var/guard
+    expose:
+      - "8000"
+  llm:
+    # llama.cpp server with Liquid AI's d1-omni-600M decision model (about 0.3 s per signup on 2 vCPU).
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command: ["-hf", "LiquidAI/d1-omni-600M-GGUF:Q8_0", "-b", "4096", "-ub", "4096", "--host", "0.0.0.0", "--port", "8080", "-t", "2"]
+    volumes:
+      - llama-cache:/root/.cache/llama.cpp
+    expose:
+      - "8080"
+  lfm:
+    # llama.cpp server with Liquid AI's LFM3-VL-2B (Q4_K_M): an AI second opinion in JSON, about 3 s per signup.
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command: ["-hf", "LiquidAI/LFM3-VL-2B-GGUF:Q4_K_M", "--host", "0.0.0.0", "--port", "8080", "-t", "2", "-c", "4096", "--jinja"]
+    volumes:
+      - llama-cache:/root/.cache/llama.cpp
+    expose:
+      - "8080"
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    environment:
+      SITE_HOSTS: ${SITE_HOSTS:?set SITE_HOSTS}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - app
+volumes:
+  llama-cache:
+  guard-data:
+  caddy-data:

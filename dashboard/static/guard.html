@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sargas Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Operations screen for a demo table: dark by default, readable from two metres. */
+:root {
+  --bg: #0c0f14; --panel: #141922; --panel2: #1a2130; --fg: #eef1f6; --fg2: #a9b2c3; --muted: #6f7a8e; --line: #263043;
+  --accent: #7aa2f7; --block: #ff6b61; --review: #f2b84b; --allow: #4fd08a; --attack: #ff6b61; --visitor: #7aa2f7; --sim: #8b94a7;
+  --display: "Space Grotesk", system-ui, sans-serif; --body: "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1500px; margin: 0 auto; padding: 18px 20px 40px; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: center; gap: 12px; }
+.live { display: inline-flex; align-items: center; gap: 8px; font: 600 12px var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--allow);
+  border: 1px solid color-mix(in srgb, var(--allow) 40%, transparent); padding: 4px 10px; border-radius: 999px; }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--allow); animation: pulse 1.6s infinite; }
+.live.stale { color: var(--review); border-color: color-mix(in srgb, var(--review) 40%, transparent); }
+.live.stale i { background: var(--review); animation: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--allow) 60%, transparent); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.meta { color: var(--fg2); font: 13px var(--mono); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.panel h2 { font: 600 13px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--fg2); margin: 0 0 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.tile .big { font: 700 44px/1 var(--display); font-variant-numeric: tabular-nums; }
+.tile .label { color: var(--fg2); font-size: 14px; margin-top: 6px; }
+.tile .split { display: flex; gap: 12px; margin-top: 10px; font: 500 13px var(--mono); flex-wrap: wrap; }
+.tile.attack { border-top: 3px solid var(--attack); } .tile.visitor { border-top: 3px solid var(--visitor); } .tile.sim { border-top: 3px solid var(--sim); }
+.tiles .formula { grid-column: span 2; }
+@media (min-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr 2.3fr 1.3fr; } .tiles .formula { grid-column: auto; } }
+@media (max-width: 760px) { .tiles .formula { grid-column: auto; } .formula .cols { grid-template-columns: 1fr; } }
+.formula .eq { font: 600 16px var(--mono); margin-bottom: 8px; }
+.ftable { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; font-size: 13px; color: var(--fg2); }
+.ftable div { display: flex; justify-content: space-between; gap: 8px; }
+.ftable b { font-family: var(--mono); color: var(--fg); }
+.ftable .g { color: var(--accent); }
+.formula .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.formula .cols b { color: var(--fg); font-family: var(--mono); }
+.formula .sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.banadmin input { font: 12px var(--mono); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; width: 140px; }
+.banadmin button, .tog { font: 600 12px var(--body); background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.tog.on { background: color-mix(in srgb, var(--block) 22%, transparent); border-color: var(--block); color: var(--block); }
+.tog.off { color: var(--muted); }
+.tog:disabled { cursor: default; opacity: .85; }
+tr.off td { color: var(--muted); text-decoration: line-through; }
+tr.off td:last-child { text-decoration: none; }
+.aisum { margin-top: 6px; font-size: 13px; color: var(--fg2); border-left: 3px solid var(--accent); padding-left: 8px; }
+.aisum b { color: var(--accent); }
+.aip { font: 600 11px var(--mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 2px 6px; border-radius: 4px; }
+.b { color: var(--block); } .r { color: var(--review); } .a { color: var(--allow); }
+.grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+@media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+#chart svg { display: block; width: 100%; height: 190px; }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--fg2); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 700 11px var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.chip.block { color: var(--block); background: color-mix(in srgb, var(--block) 15%, transparent); }
+.chip.review { color: var(--review); background: color-mix(in srgb, var(--review) 15%, transparent); }
+.chip.allow { color: var(--allow); background: color-mix(in srgb, var(--allow) 15%, transparent); }
+.src { font: 600 11px var(--mono); padding: 2px 6px; border-radius: 4px; background: var(--panel2); }
+.src.attack { color: var(--attack); } .src.visitor { color: var(--visitor); } .src.simulated { color: var(--sim); }
+.group { border-top: 1px solid var(--line); padding: 12px 0; }
+.group:first-of-type { border-top: 0; padding-top: 0; }
+.group header { justify-content: flex-start; gap: 10px; margin-bottom: 6px; }
+.group ul { margin: 4px 0 6px; padding-left: 18px; color: var(--fg2); font-size: 14px; }
+.group .why { font-weight: 600; font-size: 14px; }
+.empty { color: var(--muted); font-size: 14px; }
+.feed { display: grid; gap: 0; max-height: 640px; overflow-y: auto; }
+.row { display: grid; grid-template-columns: 70px 1fr auto; gap: 4px 10px; padding: 9px 4px; border-bottom: 1px solid var(--line); align-items: start; }
+.row .t { font: 12px var(--mono); color: var(--muted); padding-top: 2px; }
+.row .who { font: 500 14px var(--mono); overflow-wrap: anywhere; }
+.row .reasons { grid-column: 2 / 4; color: var(--fg2); font-size: 13px; }
+.row .later { font-size: 12px; color: var(--review); }
+.row.new { animation: flash 1.8s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } to { background: transparent; } }
+.qr { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.qr > div:last-child { flex: 1 1 170px; min-width: 0; }
+#qr { background: #fff; padding: 8px; border-radius: 8px; width: 148px; height: 148px; }
+#qr img, #qr canvas { width: 132px !important; height: 132px !important; }
+.qr .url { font: 600 18px var(--mono); overflow-wrap: anywhere; color: var(--accent); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; color: var(--fg2); font-weight: 600; font-size: 12px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.person { display: grid; grid-template-columns: 64px 1fr 120px; gap: 4px 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); align-items: center; }
+.person .tk { font: 700 17px var(--mono); letter-spacing: .06em; }
+.person .who { font: 500 14px var(--mono); overflow-wrap: anywhere; }
+.person .sc { text-align: right; }
+.person .num { font: 700 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+.person .bar { height: 6px; border-radius: 3px; background: var(--panel2); margin-top: 6px; overflow: hidden; }
+.person .bar i { display: block; height: 100%; border-radius: 3px; transition: width .6s ease; }
+.person .why { grid-column: 2 / 4; color: var(--fg2); font-size: 13px; }
+.person .chg { font: 600 12px var(--mono); color: var(--review); }
+.person.new, .person.changed { animation: flash 1.8s ease-out; }
+.mini svg { display: block; width: 100%; height: 120px; }
+.mini .cap { font-size: 13px; color: var(--fg2); margin-top: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.big2 { font: 700 30px var(--display); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .person.new, .person.changed, .person .bar i { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .live i, .row.new { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Sargas <span class="meta" style="font-weight:400">Lithuanian for "guard" · protecting Neighbr's free tier</span> <span class="live" id="live"><i></i><span id="liveText">Live</span></span></h1>
+    <div class="meta" id="meta">connecting…</div>
+  </header>
+
+  <div class="tiles">
+    <div class="panel tile attack"><div class="big" id="atkBig">0</div><div class="label">bot swarm signups</div>
+      <div class="split" id="atkSplit"></div></div>
+    <div class="panel tile visitor"><div class="big" id="visBig">0</div><div class="label">real visitors on the trial page</div>
+      <div class="split" id="visSplit"></div></div>
+    <div class="panel formula"><h2>How the bot score is made</h2>
+      <div class="eq">score = 100 / (1 + e<sup>−z</sup>)&nbsp;&nbsp; z = <span id="bias">−4</span> + Σ weight × factor</div>
+      <div class="ftable" id="ftable"></div>
+      <div class="sub" style="margin-top:6px">each factor is measured from 0 to 1 · <span class="a">under 35 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></div></div>
+    <div class="panel qr"><div id="qr" aria-label="QR code to the trial page"></div>
+      <div><h2 style="margin-bottom:4px">Try to get past it</h2><div class="url" id="trialUrl"></div>
+        <div class="meta" style="margin-top:6px">Sign up from your own phone. Then try to farm accounts.</div></div></div>
+  </div>
+
+  <div class="panel" id="chart">
+    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px"><h2>Signups, last 20 minutes (30-second bins)</h2>
+      <div class="legend"><span style="--c: var(--block)">blocked</span><span style="--c: var(--review)">review</span><span style="--c: var(--allow)">allowed</span></div></div>
+    <svg id="bars" viewBox="0 0 1000 190" preserveAspectRatio="none" role="img" aria-label="Signups per 30 seconds by verdict"></svg>
+  </div>
+
+  <div class="two">
+    <div class="panel mini"><h2>Bot scores right now (live signups)</h2>
+      <svg id="liveHist" viewBox="0 0 500 120" preserveAspectRatio="none" role="img" aria-label="Live bot score distribution by source"></svg>
+      <div class="legend"><span style="--c: var(--attack)">bot swarm</span><span style="--c: var(--visitor)">real visitors</span></div>
+      <div class="cap">Bot score 0 to 100. Under 35 allowed, 35 to 59 review, 60 and over blocked.</div></div>
+    <div class="panel mini"><h2>How the score was tested (forged bot activity logs)</h2>
+      <div id="tested"><p class="empty">No evaluation file yet.</p></div></div>
+  </div>
+
+  <div class="grid">
+    <div class="panel"><h2>Review queue: algorithm + AI ranking</h2>
+      <div id="queue"><p class="empty">Nothing needs a human look right now.</p></div>
+      <p class="meta" style="margin-top:6px">Ranked by the algorithm's score blended with d1's second opinion (better ranking on the labelled set: AUC 0.90 → 0.94). The AI orders the queue; it never changes a verdict.</p>
+      <h2 style="margin-top:18px">Swarms detected right now</h2><div id="groups"><p class="empty">No groups of linked signups yet.</p></div>
+      <h2 style="margin-top:18px">Banned IPs (refused at the door)</h2>
+      <div id="bans" style="margin-top:8px"><p class="empty">No banned IPs yet.</p></div>
+      <h2 style="margin-top:18px">Attack campaigns (answer key from the attack script)</h2><div id="campaigns"><p class="empty">No attack yet.</p></div></div>
+    <div class="panel"><h2>People being scored live</h2><div class="feed" id="feed"><p class="empty">Waiting for the first signup…</p></div></div>
+  </div>
+  <p class="meta">Emails are masked. Only real visitors and the bot swarm launched from the console appear here. The detector never sees which signups the console sent; that label only feeds the scoreboard.
+    Timing tests compare each group against two weeks of past signups (a simulated baseline that is never shown as users).</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const host = location.hostname;
+const siteBase = (h) => h.replace(/^(www|trial|guard|attack)\./, "");
+const neighbrUrl = (b) => `${location.protocol}//${b.includes("sslip.io") ? "trial." + b : b}`;
+const trialUrl = host.startsWith("guard.") ? neighbrUrl(siteBase(host)) : `${location.origin}/trial`;
+$("trialUrl").textContent = trialUrl.replace(/^https?:\/\//, "");
+try { new QRCode($("qr"), {text: trialUrl, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M}); } catch (e) { $("qr").hidden = true; }
+
+const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "–";
+function split(c, real) {
+  const later = c.caught_later ? ` · <span class="r">${c.caught_later} caught after signup</span>` : "";
+  return real
+    ? `<span class="b">${c.block} blocked</span><span class="r">${c.review} review</span><span class="a">${c.allow} allowed</span>`
+    : `<span class="b">${c.block} blocked (${pct(c.block, c.total)})</span><span class="r">${c.review} review</span><span class="a">${c.allow} got in</span>${later}`;
+}
+const clock = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+
+function drawBars(timeline) {
+  const W = 1000, H = 190, pad = 22, n = timeline.length, bw = W / n;
+  const max = Math.max(4, ...timeline.map((b) => b.block + b.review + b.allow));
+  let s = "";
+  for (let k = 0; k <= 2; k++) {
+    const y = H - pad - (H - pad - 8) * k / 2;
+    s += `<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="4" y="${y - 4}" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${Math.round(max * k / 2)}</text>`;
+  }
+  timeline.forEach((b, i) => {
+    let y = H - pad;
+    for (const [key, col] of [["block", "var(--block)"], ["review", "var(--review)"], ["allow", "var(--allow)"]]) {
+      const h = (H - pad - 8) * b[key] / max;
+      if (h > 0) { s += `<rect x="${i * bw + 2}" y="${y - h}" width="${bw - 4}" height="${h}" rx="2" fill="${col}"/>`; y -= h; }
+    }
+    if (i % 10 === 0) s += `<text x="${i * bw + 2}" y="${H - 6}" fill="var(--muted)" font-size="11" font-family="JetBrains Mono, monospace">${clock(b.t).slice(0, 5)}</text>`;
+  });
+  $("bars").innerHTML = s;
+}
+
+let version = -1, seen = new Set(), first = true, lastOk = Date.now(), lastScore = {};
+function drawHist(svg, series, log = false) {
+  const W = 500, H = 120, pad = 18, n = 10, bw = W / n;
+  const tot = Array.from({length: n}, (_, i) => series.reduce((a, [v]) => a + v[i], 0));
+  const f = (v) => log ? Math.log10(1 + v) : v;
+  const max = Math.max(1, ...tot.map(f));
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    let y = H - pad, acc = 0;
+    for (const [v, col] of series) {
+      if (!v[i]) continue;
+      const h0 = (H - pad - 18) * f(acc) / max, h1 = (H - pad - 18) * f(acc + v[i]) / max;
+      out += `<rect x="${i * bw + 3}" y="${H - pad - h1}" width="${bw - 6}" height="${h1 - h0}" fill="${col}" rx="2"/>`;
+      acc += v[i];
+    }
+    if (tot[i]) out += `<text x="${i * bw + bw / 2}" y="${H - pad - (H - pad - 18) * f(tot[i]) / max - 4}" text-anchor="middle" fill="var(--fg2)" font-size="11" font-family="JetBrains Mono, monospace">${tot[i]}</text>`;
+    out += `<text x="${i * bw + bw / 2}" y="${H - 4}" text-anchor="middle" fill="var(--muted)" font-size="10" font-family="JetBrains Mono, monospace">${i * 10}</text>`;
+  }
+  out += `<line x1="${3.5 * bw}" x2="${3.5 * bw}" y1="0" y2="${H - pad}" stroke="var(--review)" stroke-dasharray="3 3"/><line x1="${6 * bw}" x2="${6 * bw}" y1="0" y2="${H - pad}" stroke="var(--block)" stroke-dasharray="3 3"/>`;
+  svg.innerHTML = out;
+}
+function renderBans(bans, after) {
+  $("bans").innerHTML = bans.length ? `<table><tr><th>IP</th><th class="num">Bot accounts</th><th class="num">Refused since</th><th>Why</th><th>Ban</th><th></th></tr>
+    ${bans.map((b) => `<tr class="${b.enabled ? "" : "off"}"><td class="mono">${esc(b.ip)}</td><td class="num">${b.accounts}</td><td class="num">${b.refused}</td>
+      <td style="font-size:12px; color:var(--fg2)">${esc(b.reason).slice(0, 110)}</td>
+      <td><button class="tog ${b.enabled ? "on" : "off"}" data-id="${b.id}" data-on="${b.enabled ? 1 : 0}">${b.enabled ? "ON" : "OFF"}</button></td>
+      <td><button class="tog rst" data-id="${b.id}" title="Remove the ban and delete this IP's earlier signups">Reset</button></td></tr>`).join("")}</table>`
+    : `<p class="empty">No banned IPs yet. An IP is banned after ${after} blocked accounts.</p>`;
+  $("bans").querySelectorAll("button.rst").forEach((btn) => btn.onclick = async () => {
+    if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Sure?"; setTimeout(() => { btn.dataset.armed = ""; btn.textContent = "Reset"; }, 3000); return; }
+    try {
+      const res = await fetch("/api/guard/ban/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: Number(btn.dataset.id)})});
+      if (!res.ok) throw new Error("Could not reset.");
+      version = -1;
+    } catch (e) { btn.textContent = e.message; }
+  });
+  $("bans").querySelectorAll("button.tog:not(.rst)").forEach((btn) => btn.onclick = async () => {
+    try {
+      const res = await fetch("/api/guard/ban", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({id: Number(btn.dataset.id), enabled: btn.dataset.on !== "1"})});
+      if (!res.ok) throw new Error("Could not change the ban.");
+      version = -1;
+    } catch (e) { btn.textContent = e.message; }
+  });
+}
+let testedDrawn = false;
+function renderTested(t) {
+  if (!t || testedDrawn) return;
+  const st = t.standard, hd = t.hard;
+  $("tested").innerHTML = `<div style="display:flex; gap:22px; flex-wrap:wrap; margin-bottom:6px">
+      <div><div class="big2">${st.auc.toFixed(2)}</div><div class="meta">AUC, ${st.bots_total.toLocaleString()} bots vs ${st.people_total.toLocaleString()} people</div></div>
+      <div><div class="big2">${st.cut70.false_positive_rate}%</div><div class="meta">people scoring 70+ (${st.cut70.fp} of ${(st.cut70.fp + st.cut70.tn).toLocaleString()})</div></div>
+      <div><div class="big2">${st.cut70.recall}%</div><div class="meta">bots scoring 70+ (hard logs: ${hd ? hd.cut70.recall + "%" : "–"})</div></div></div>
+    <svg id="testHist" viewBox="0 0 500 120" preserveAspectRatio="none" role="img" aria-label="Score distribution for bots and people in the forged logs"></svg>
+    <div class="legend"><span style="--c: var(--attack)">bots in the logs</span><span style="--c: var(--sim)">people in the logs</span><span>log scale</span></div>
+    <div class="cap">10 forged signup logs with an answer key (5 standard, 5 with smarter attackers). Every user is scored with reasons. The tail of bots at 0 is the careful human-like operator we do not catch.</div>`;
+  drawHist($("testHist"), [[st.people, "var(--sim)"], [st.bots, "var(--attack)"]], true);
+  testedDrawn = true;
+}
+function render(s) {
+  const sb = s.scoreboard;
+  $("atkBig").textContent = sb.attack.total; $("atkSplit").innerHTML = split(sb.attack, false);
+  $("visBig").textContent = sb.visitor.total; $("visSplit").innerHTML = split(sb.visitor, true);
+  $("meta").textContent = `${s.live_rows} live signups · ${clock(s.now)}`;
+  drawBars(s.timeline);
+  $("groups").innerHTML = s.groups.length ? s.groups.map((g) => `<div class="group"><header><span class="chip ${esc(g.action)}">${esc(g.action)}</span>
+      <b>${g.size} linked signups</b><span class="meta">${g.attack} from the attack script</span></header>
+      <ul>${g.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}<li>${esc(g.timing)}</li></ul><div class="why">${g.why.map(esc).join(" ")}</div>${g.ai_summary ? `<div class="aisum"><b>AI summary (LFM3):</b> ${esc(g.ai_summary)}</div>` : ""}</div>`).join("")
+    : `<p class="empty">No groups of linked signups yet.</p>`;
+  const camps = Object.entries(s.campaigns);
+  $("campaigns").innerHTML = camps.length ? `<table><tr><th>Campaign</th><th class="num">Sent</th><th class="num">Blocked</th><th class="num">Review</th><th class="num">Got in</th></tr>
+      ${camps.map(([k, c]) => `<tr><td>${esc(k)}</td><td class="num">${c.total}</td><td class="num b">${c.block}</td><td class="num r">${c.review}</td><td class="num a">${c.allow}</td></tr>`).join("")}</table>`
+    : `<p class="empty">No attack yet.</p>`;
+  $("feed").innerHTML = s.feed.length ? s.feed.map((r) => {
+    const isNew = !first && !seen.has(r.id);
+    const changed = !isNew && !first && lastScore[r.id] !== undefined && lastScore[r.id] !== r.score;
+    const col = r.score >= 60 ? "var(--block)" : r.score >= 35 ? "var(--review)" : "var(--allow)";
+    const chg = r.score_at_signup !== null && r.score_at_signup !== r.score ? `<span class="chg">${r.score_at_signup} at signup → ${r.score} now</span>` : "";
+    return `<div class="person${isNew ? " new" : changed ? " changed" : ""}">
+      <div><div class="tk">${esc(r.ticket || "")}</div><div class="t meta">${clock(r.time)}</div></div>
+      <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}${r.ai_p != null ? ` <span class="aip" title="d1's second opinion over all the evidence; ranks the review queue, never changes the score">AI ${Math.round(r.ai_p * 100)}% bot</span>` : ""}</div>
+      <div class="sc"><div class="num" style="color:${col}">${r.score ?? "–"}</div><div class="bar"><i style="width:${r.score || 0}%; background:${col}"></i></div></div>
+      ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b> ${esc(p.label || "")} <span class="meta">(${Number(p.x).toFixed(2)} × ${p.weight})</span> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No factor above zero: z = −4, score ${r.score}.</div>`}</div>`;
+  }).join("") : `<p class="empty">Waiting for the first signup…</p>`;
+  s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
+  drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
+  renderTested(s.tested);
+  renderBans(s.bans || [], s.ban_after);
+  const q = s.review_queue || [];
+  $("queue").innerHTML = q.length ? `<table><tr><th>#</th><th>Ticket</th><th>Who</th><th class="num">Score</th><th class="num">AI</th><th class="num">Rank</th><th>Top reason</th></tr>
+    ${q.map((r, k) => `<tr><td>${k + 1}</td><td class="mono">${esc(r.ticket || "")}</td><td class="mono">${esc(r.email)}</td><td class="num">${r.score}</td>
+      <td class="num">${r.ai_p == null ? "…" : Math.round(r.ai_p * 100) + "%"}</td><td class="num">${Math.round(r.rank * 100)}</td><td style="font-size:12px; color:var(--fg2)">${esc(r.reason)}</td></tr>`).join("")}</table>`
+    : `<p class="empty">Nothing needs a human look right now.</p>`;
+  if (s.model && !$("ftable").dataset.done) {
+    $("bias").textContent = String(s.model.bias).replace("-", "−");
+    $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${f.group ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");
+    $("ftable").dataset.done = "1";
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch(`/api/guard/state?since_version=${version}`, {cache: "no-store"});
+    if (res.ok) {
+      const s = await res.json();
+      lastOk = Date.now();
+      if (!s.unchanged) { version = s.version; render(s); }
+    }
+  } catch (e) {}
+  const stale = Date.now() - lastOk > 6000;
+  $("live").classList.toggle("stale", stale); $("liveText").textContent = stale ? "Reconnecting" : "Live";
+  setTimeout(poll, 1200);
+}
+poll();
+</script>
+</body>
+</html>
