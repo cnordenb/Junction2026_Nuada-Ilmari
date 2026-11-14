@@ -269,7 +269,9 @@ def signup_signals(frame: pd.DataFrame) -> list[list[dict]]:
 # second account on one phone nudges it, a fifth pushes it hard. Weights are
 # set by hand from what each factor means (not fitted), then checked on the
 # forged logs (scripts/eval_signups.py). It is a ranking score with stated
-# rules, not a calibrated probability.
+# rules, not a calibrated probability, even though it uses the logistic curve.
+# Correlated evidence is damped: inside a group, device and inbox reuse count
+# half, and group size and timing count only through identity details.
 BIAS = -4.0
 FACTORS = [
     # key, label, weight, how x is measured
@@ -313,6 +315,8 @@ def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
     per_inbox = inbox.map(inbox.value_counts())
     device_counts = frame["device_id"].map(frame["device_id"].value_counts())
     has_fp_column = (frame["device_id"] != "").mean() >= 0.5
+    times = frame["time"].to_numpy(dtype=float) if "time" in frame else np.zeros(n)
+    first_on_inbox = set(pd.Series(times).groupby(inbox.to_numpy()).idxmin().to_numpy().tolist())
     for i, row in enumerate(frame.to_dict("records")):
         local, domain = split_email(row["email"])
 
@@ -324,8 +328,10 @@ def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
         if domain in throwaway:
             put("throwaway", 1, f"Email is from a throwaway inbox service ({domain}).")
         if per_inbox.iat[i] > 1 and spellings.iat[i] > 1:
-            put("same_inbox", (per_inbox.iat[i] - 1) / 3,
-                f"{per_inbox.iat[i]} accounts use spellings of one inbox ({inbox.iat[i]}); the provider ignores dots or +tags.")
+            first = i in first_on_inbox
+            put("same_inbox", (per_inbox.iat[i] - 1) / 3 * (0.5 if first else 1.0),
+                f"{per_inbox.iat[i]} accounts use spellings of one inbox ({inbox.iat[i]}); the provider ignores dots or +tags."
+                + (" This was the first of them, so it counts half." if first else ""))
         if (row["user_agent"] and is_automation(row["user_agent"])) or str(row.get("webdriver", "")) in {"1", "true", "True"}:
             put("automation", 1, "The browser identifies itself as an automation tool or reports it is remote-controlled.")
         if str(row.get("honeypot", "")) in {"1", "true", "True"}:
@@ -479,8 +485,10 @@ def judge_cluster(members: pd.DataFrame, risks: np.ndarray, sync: dict, cohesion
     keys = {e["key"] for e in evidence}
     mean_risk = float(risks.mean())
     timing = sync["sync"]
-    organisation = ("organisation" in kinds and not ({"inbox", "device", "disposable"} & keys)
-                    and mean_risk < 20)
+    # An organisation shares a real domain but nothing a farm would share: no
+    # devices, inboxes, throwaway domains, automation or generated email names.
+    organisation = ("organisation" in kinds and not ({"inbox", "device", "disposable", "etemplate"} & keys)
+                    and not any(e["key"] == "ua" and e["kind"] == "identity" for e in evidence) and mean_risk < 20)
     identity = "identity" in kinds
     software = "software" in kinds
     hosting = "hosting" in kinds
@@ -558,21 +566,27 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         size_x = min(1.0, max(0.0, (len(idx) - 4) / 10))
         timing_x = float(sync["sync"]) / 100
         shared_txt = "; ".join(e["text"].rstrip(".") for e in verdict["evidence"][:2]) or "a few shared details"
-        ev_w = [EVIDENCE_WEIGHT.get(e["key"], 0.5) for e in verdict["evidence"] if e["kind"] != "organisation"]
         ev_all = [e for e in verdict["evidence"] if e["kind"] != "organisation"]
+        ev_w = [EVIDENCE_WEIGHT.get(e["key"], 0.5) for e in ev_all]
+        id_all = [e for e in ev_all if e["kind"] in ("identity", "hosting")]   # a datacenter is not a family's wifi
+        id_w = [EVIDENCE_WEIGHT.get(e["key"], 0.5) for e in id_all]
         for i in idx:
             row_i = frame.iloc[i]
             # How much of the group's case applies to this signup: shared
             # device or inbox count fully, a shared email shape only a little.
             carry = (sum(w for e, w in zip(ev_all, ev_w) if e["match"](row_i)) / sum(ev_w)) if ev_w else 0.0
-            if size_x * carry > 0:
-                fx[i, fcol["swarm_size"]] = size_x * carry
+            # Size and timing only count through identity details (device,
+            # inbox, throwaway, automation, email pattern): people who merely
+            # share a wifi network and sign up together are not a swarm.
+            carry_id = (sum(w for e, w in zip(id_all, id_w) if e["match"](row_i)) / sum(id_w)) if id_w else 0.0
+            if size_x * carry_id > 0:
+                fx[i, fcol["swarm_size"]] = size_x * carry_id
                 fwhy[i]["swarm_size"] = f"Linked to {len(idx) - 1} other signups ({shared_txt})."
             if carry:
                 fx[i, fcol["shared_identity"]] = carry
                 fwhy[i]["shared_identity"] = f"Has {carry:.0%} of what the group shares (weighted)."
-            if timing_x * carry > 0:
-                fx[i, fcol["timing"]] = timing_x * carry
+            if timing_x * carry_id > 0:
+                fx[i, fcol["timing"]] = timing_x * carry_id
                 fwhy[i]["timing"] = _timing_text(sync)
             if verdict["organisation"]:
                 fx[i, fcol["organisation"]] = 1.0
@@ -603,6 +617,15 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
             "signups": [_row(frame, i, risk, signals) for i in order[:sample]],
             "_idx": idx,
         })
+    # Correlated evidence: a shared device or inbox already drives the group
+    # factors, so inside a group its individual factor counts half.
+    in_group = fx[:, fcol["shared_identity"]] > 0
+    for key in ("device_reuse", "same_inbox"):
+        j = fcol[key]
+        hit = in_group & (fx[:, j] > 0)
+        fx[hit, j] *= 0.5
+        for i in np.flatnonzero(hit):
+            fwhy[i][key] += " Counted at half weight because the group factors already include it."
     # The score decides the action: one equation for every signup.
     zval, score = score_from(fx)
     action = np.where(score >= SCORE_BLOCK, "block", np.where(score >= SCORE_REVIEW, "review", "allow")).astype(object)

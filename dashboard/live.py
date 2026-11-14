@@ -383,7 +383,7 @@ def guard_state(since_version: int = -1) -> dict:
         "feed": [{"id": r["id"], "time": r["created_at"], "email": _mask(r["email"]), "source": r["source"],
                   "campaign": r["campaign"], "action": r["action_now"], "at_signup": r["action_at_signup"],
                   "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3],
-                  "parts": json.loads(r["parts"] or "[]")[:3],
+                  "parts": json.loads(r["parts"] or "[]"),
                   "ticket": r["ticket"], "score": r["score"], "score_at_signup": r["score_at_signup"],
                   "history": json.loads(r["history"] or "[]")[-12:]} for r in feed],
     }

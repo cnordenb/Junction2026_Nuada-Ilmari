@@ -113,3 +113,14 @@
 **19:34:48** IP ban list (request from Tom). An IP is banned automatically after 2 blocked accounts (`GUARD_BAN_AFTER`), so one person on a shared mobile network does not ban everyone; banned IPs are refused at the signup door with no scoring. The dashboard lists bans (bot accounts, refusals since, reason) with an ON/OFF switch each (demo key needed); a ban switched off stays off. Real visitors IPs are shown without the last part. Console bots now use documentation-only source IPs (RFC 5737): naive-bot one cloud IP (banned fast), alias-farm 3 IPs, stealth-farm and humanlike rotate like residential proxies, which shows why IP bans alone cannot stop farms. Reset also clears bans. Deployed and reset; full tests not rerun.
 
 **19:44:44** Ban toggles: removed the demo key (by request; anyone on the dashboard can switch bans). Found in use: switching a ban OFF lets the IP back in, but its earlier blocked signups still count (e.g. device reused 5 times), so the person is blocked again by score. Added a per-IP Reset (click twice): removes the ban and deletes that IP's earlier signups, then re-judges. Deployed; tests not rerun.
+
+**19:59:19** Fixed the score's logic issues found in review, and added a live equation visual to the dashboard.
+- Device ID on the Neighbr page now includes a random ID kept in the browser, so two identical phones are two devices (before, same-model iPhones could collide and look like a device farm).
+- Correlated evidence damped: inside a group, device reuse and same-inbox count half (the group factors already include them).
+- Group size and timing now count only through identity details (device, inbox, throwaway, automation, email pattern) or a datacenter network, not a shared home or venue wifi.
+- Organisation discount now also requires no generated email pattern and no automation browser.
+- The first account on a reused inbox counts half for that factor.
+- Labelled everywhere as a ranking score from stated rules, not a probability.
+- Forged logs after the fixes: standard and hard both 0 of 16,864 people blocked and 0 sent to review; 85.7% of bots blocked; AUC 0.93 / 0.92.
+- Dashboard: "How Sargas decides, live": the equation with every term, the active terms lit with their values for the selected signup; a waterfall of contributions from -4 to z with the review and block lines; the logistic curve with every live signup placed on it. Click a ticket or a person row to select.
+- Deployed and reset; unit tests not rerun.
