@@ -212,12 +212,21 @@ function drawHist(svg, series, log = false) {
   svg.innerHTML = out;
 }
 function renderBans(bans, after) {
-  $("bans").innerHTML = bans.length ? `<table><tr><th>IP</th><th class="num">Bot accounts</th><th class="num">Refused since</th><th>Why</th><th>Ban</th></tr>
+  $("bans").innerHTML = bans.length ? `<table><tr><th>IP</th><th class="num">Bot accounts</th><th class="num">Refused since</th><th>Why</th><th>Ban</th><th></th></tr>
     ${bans.map((b) => `<tr class="${b.enabled ? "" : "off"}"><td class="mono">${esc(b.ip)}</td><td class="num">${b.accounts}</td><td class="num">${b.refused}</td>
       <td style="font-size:12px; color:var(--fg2)">${esc(b.reason).slice(0, 110)}</td>
-      <td><button class="tog ${b.enabled ? "on" : "off"}" data-id="${b.id}" data-on="${b.enabled ? 1 : 0}">${b.enabled ? "ON" : "OFF"}</button></td></tr>`).join("")}</table>`
+      <td><button class="tog ${b.enabled ? "on" : "off"}" data-id="${b.id}" data-on="${b.enabled ? 1 : 0}">${b.enabled ? "ON" : "OFF"}</button></td>
+      <td><button class="tog rst" data-id="${b.id}" title="Remove the ban and delete this IP's earlier signups">Reset</button></td></tr>`).join("")}</table>`
     : `<p class="empty">No banned IPs yet. An IP is banned after ${after} blocked accounts.</p>`;
-  $("bans").querySelectorAll("button.tog").forEach((btn) => btn.onclick = async () => {
+  $("bans").querySelectorAll("button.rst").forEach((btn) => btn.onclick = async () => {
+    if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Sure?"; setTimeout(() => { btn.dataset.armed = ""; btn.textContent = "Reset"; }, 3000); return; }
+    try {
+      const res = await fetch("/api/guard/ban/reset", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({id: Number(btn.dataset.id)})});
+      if (!res.ok) throw new Error("Could not reset.");
+      version = -1;
+    } catch (e) { btn.textContent = e.message; }
+  });
+  $("bans").querySelectorAll("button.tog:not(.rst)").forEach((btn) => btn.onclick = async () => {
     try {
       const res = await fetch("/api/guard/ban", {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({id: Number(btn.dataset.id), enabled: btn.dataset.on !== "1"})});

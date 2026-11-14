@@ -564,3 +564,23 @@ def ban_toggle(item: BanToggle, request: Request) -> dict:
     if not cur.rowcount:
         raise HTTPException(404, "No such ban.")
     return {"ok": True}
+
+
+class BanReset(BaseModel):
+    id: int
+
+
+@router.post("/api/guard/ban/reset")
+def ban_reset(item: BanReset) -> dict:
+    """Forgive an IP completely: remove its ban and delete its earlier
+    signups, so its next signup is judged from a clean slate."""
+    with _lock:
+        row = _con.execute("SELECT ip FROM bans WHERE id = ?", (item.id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "No such ban.")
+        deleted = _con.execute("DELETE FROM signups WHERE ip = ?", (row["ip"],)).rowcount
+        _con.execute("DELETE FROM bans WHERE id = ?", (item.id,))
+        _rejudge()
+        _update_bans()
+        _con.commit()
+    return {"ok": True, "signups_deleted": deleted}
