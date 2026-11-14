@@ -19,6 +19,9 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("GUARD_DB", str(Path(tempfile.mkdtemp()) / "guard.sqlite"))
 os.environ.setdefault("GUARD_DEMO_KEY", "test-key")
 os.environ.setdefault("GUARD_SIM_EVERY", "0")
+# Let tests choose each signup's IP (as Caddy does in production), so one test's
+# IP ban does not leak into the next.
+os.environ.setdefault("SIGNUP_TRUST_PROXY", "1")
 
 
 @pytest.fixture(scope="module")
@@ -30,8 +33,15 @@ def client():
         yield c
 
 
-def signup(client, email, truth=None, **extra):
-    headers = {"X-Demo-Truth": f"{os.environ['GUARD_DEMO_KEY']}:{truth}"} if truth else {}
+_ip_counter = iter(range(1, 60000))
+
+
+def signup(client, email, truth=None, ip=None, **extra):
+    """One signup. Each gets its own documentation-range IP unless one is given."""
+    n = next(_ip_counter)
+    headers = {"X-Forwarded-For": ip or f"198.51.{100 + n // 250}.{n % 250 + 1}"}
+    if truth:
+        headers["X-Demo-Truth"] = f"{os.environ['GUARD_DEMO_KEY']}:{truth}"
     body = {"email": email, "business": extra.pop("business", "Test Horse"), "device_id": extra.pop("device_id", ""),
             "fill_ms": extra.pop("fill_ms", 8000), **extra}
     return client.post("/api/trial/signup", json=body, headers=headers).json()
@@ -130,3 +140,20 @@ def test_attack_console_needs_key_and_lists_campaigns(client):
     assert names[:3] == ["naive-bot", "alias-farm", "stealth-farm"] and all(c["signups"] > 0 for c in st["campaigns"])
     assert client.get("/attack").status_code == 200
     assert "Swarm Console" in client.get("/", headers={"host": "attack.example.com"}).text
+
+
+
+def test_ip_is_banned_after_two_blocked_accounts_and_reset_lifts_it(client):
+    ip = "203.0.113.66"
+    for n in (1, 2):
+        r = signup(client, f"user4821{n}@mailinator.com", truth="naive", ip=ip, website="http://spam.example", fill_ms=0)
+        assert r["action"] == "block"
+    third = signup(client, "user48213@mailinator.com", truth="naive", ip=ip, website="http://spam.example", fill_ms=0)
+    assert third.get("banned") and third["action"] == "block"
+    bans = client.get("/api/guard/state").json()["bans"]
+    ban = next(b for b in bans if b["ip"] == ip)
+    assert ban["enabled"] and ban["refused"] >= 1
+    client.post("/api/guard/ban", json={"id": ban["id"], "enabled": False})
+    assert not signup(client, "anna.virtanen@example.fi", ip=ip, device_id="ffff0000aaaa1111").get("banned")
+    assert client.post("/api/guard/ban/reset", json={"id": ban["id"]}).json()["ok"]
+    assert not any(b["ip"] == ip for b in client.get("/api/guard/state").json()["bans"])

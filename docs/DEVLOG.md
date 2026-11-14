@@ -142,3 +142,5 @@
 - Factor 18, "AI model (d1): looks machine-made", weight +1.5: max of the two, counted above 0.5 and rescaled to 0-1. Asked once at signup and stored, so re-judging stays fast; fail-open (2.5 s timeout, factor left out if the model is down). Data stays on the server. On its own it cannot block (verified live: a spam horse name scored 9, allowed).
 - Model licence: LFM Open License v1.0 (lfm1.0); fine for a hackathon demo, check before any commercial use.
 - Not done: d1 is not part of the forged-log evaluation (the logs were scored without it).
+
+**21:46:48** Tests: 63 passing. The 3 failures were stale tests, not bugs: two shared one IP across all test signups and hit the IP ban added later (tests now give each signup its own documentation-range IP); one expected schools and companies in review, but the graded score allows them (now checks they are never blocked). Added a test for the IP ban: banned after 2 blocked accounts, switch-off lets the IP in, reset removes the ban. Tests run without the d1 model (D1_URL unset), so its factor is skipped there.
