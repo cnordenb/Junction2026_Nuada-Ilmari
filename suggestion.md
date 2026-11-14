@@ -56,18 +56,17 @@ Possible labelled data to bootstrap the test set: the SemEval-2020 Task 11 propa
 
 This is not a side role. The challenge is judged on honesty and false positives, and she owns both the evidence for that and how it is told.
 
-**Tasks, in priority order**
+Five tasks, shaped around her interest in UI/UX and diagrams:
 
-1. **Build the test set** (Friday night to Saturday midday). Collect about 100 to 150 short texts in a shared spreadsheet: roughly half with a clear manipulation technique, half clean. Columns: text, source link, technique (or "none"), the exact passage, a note. Deliberately include the tricky clean ones: emotional but honest writing, satire, news that quotes propaganda.
-2. **Write the technique definitions** in plain language, one or two sentences each plus one example. These go straight into both the prompt and the user-facing explanations, so her wording is what users read.
-3. **False-positive review** (Saturday afternoon onward). Run texts through the live tool, record every wrong or doubtful verdict in the sheet, and hand the worst ones to the detection lead. Repeat after each improvement. Pick 3 to 5 honest failure examples for the accuracy page.
-4. **Judge the explanations.** Would a normal reader understand why this is manipulative? Rewrite unclear ones and feed the style back.
-5. **Pitch and demo.** Write the 2 to 3 minute story, choose the demo texts (one obvious hit, one clean text that correctly passes, one admitted miss), prepare slides, and rehearse with the team Sunday morning.
-6. **Mentor liaison.** Visit the Hostinger booth early Saturday with our plan and ask what they want to see; attend the Saturday 13:00 talk and bring back anything relevant.
-7. **Submission.** Own the Junction submission text, screenshots and the final check that the public URL works from a phone on mobile data.
-8. Optional: build the landing page in Hostinger AI Builder (no code needed).
+1. **Design the result screen** (Saturday morning, needed first). Wireframe the main page in Figma or on paper: text box, highlighted passages, the explanation card for each technique, the confidence indicator, and the three outcomes "techniques found", "nothing found" and "not sure". The key UX question is hers to answer: how do we show a finding without it reading as an accusation? Hand the wireframe to the front-end owner by Saturday 11:00.
+2. **Draw the "how it works" diagram** (Saturday midday). One clear flow diagram: text in, model proposes findings, quote check rejects anything not literally in the text, confidence threshold, verdict or "not sure". It goes on the live site and into the pitch, and it is how judges will understand our false-positive handling in ten seconds.
+3. **Write the technique cards** (Saturday midday to afternoon). For each of the 6 to 8 techniques: a short name, a one or two sentence plain-language definition, one example, and a colour or icon used for highlighting. The wording is used both in the prompt and in what users read.
+4. **Usability and false-positive testing** (Saturday afternoon to evening). Run 30 to 50 real texts through the live tool, including tricky clean ones (satire, emotional but honest opinion, news quoting propaganda). Log in a shared sheet every wrong verdict and every explanation a normal reader would not understand. Hand the worst to the detection lead, and pick 3 to 5 honest failures for the accuracy page.
+5. **Design the accuracy page and the pitch** (Saturday evening to Sunday morning). Lay out the "How accurate is this?" page so precision and false-positive rate are readable by a non-expert (simple chart or table, sample size, failure examples). Build the 2 to 3 minute pitch slides from the diagram and screenshots, and choose the demo texts: one clear hit, one clean text that correctly passes, one admitted miss.
 
-**Tools she needs:** a shared spreadsheet, the live URL, a slide tool. Nothing to install.
+Tasks dropped from her list and to be shared by the three technical members: building the bulk of the labelled test set, mentor liaison, and the submission text.
+
+**Tools she needs:** Figma (or similar), a diagram tool, a shared spreadsheet, the live URL, a slide tool. Nothing to install.
 
 ## 4. Timeline
 
