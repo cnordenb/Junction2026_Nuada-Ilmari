@@ -119,3 +119,13 @@ def test_score_rises_when_one_device_keeps_signing_up(client):
 def test_dashboard_carries_test_results(client):
     tested = client.get("/api/guard/state").json()["tested"]
     assert tested and tested["standard"]["auc"] > 0.8
+
+
+def test_attack_console_needs_key_and_lists_campaigns(client):
+    assert client.post("/api/attack/start", json={"campaign": "naive-bot"}).status_code == 403
+    assert client.get("/api/attack/status").status_code == 403
+    st = client.get("/api/attack/status", headers={"X-Demo-Key": os.environ["GUARD_DEMO_KEY"]}).json()
+    names = [c["name"] for c in st["campaigns"]]
+    assert names[:3] == ["naive-bot", "alias-farm", "stealth-farm"] and all(c["signups"] > 0 for c in st["campaigns"])
+    assert client.get("/attack").status_code == 200
+    assert "Swarm Console" in client.get("/", headers={"host": "attack.example.com"}).text

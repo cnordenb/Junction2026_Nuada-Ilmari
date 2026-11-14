@@ -25,6 +25,16 @@ Every signup gets a **bot score from 0 to 100** with the points and reason behin
 - **On the dashboard:** every person by ticket with their live score, the points per reason, and "score at signup → now" when a farm is caught later. Also a live histogram of scores by source, and the results on the forged logs.
 - **Tested on forged bot activity logs** (`scripts/eval_signups.py`, 10 logs with an answer key): AUC 0.92; 0 of 16,864 people score 70 or more; 85.7% of bots do (73.7% on hard logs).
 
+## The three pages for the review
+
+| Laptop | Page | Address |
+|---|---|---|
+| 1 | Analytics dashboard: live scores, the score formula, swarms, results on the forged logs, QR code | https://guard.179-67-199-198.sslip.io |
+| 2 | Free-trial signup for real people (or their phones via the QR code) | https://trial.179-67-199-198.sslip.io |
+| 3 | Attack console: unlock with the demo key, launch a campaign (fixed size, runs once) | https://attack.179-67-199-198.sslip.io |
+
+Only real visitors and the campaigns launched from the console appear. "Reset demo" on the console clears everything between groups of reviewers.
+
 ## Where it runs now
 
 - Trial site: **https://trial.179-67-199-198.sslip.io** (and https://trial.botswarm.site once the domain resolves)

@@ -93,3 +93,10 @@
 - Decision: serve on `179-67-199-198.sslip.io` meanwhile (wildcard DNS to the server's IP), with real Let's Encrypt certificates. Live now: https://trial.179-67-199-198.sslip.io and https://guard.179-67-199-198.sslip.io. A watcher on Tom's Mac switches Caddy to botswarm.site once all three names resolve.
 - Tested from outside over the internet: attack from this Mac, 27 of 27 attack signups blocked (4 caught after signup), 11 of 11 simulated customers allowed; dashboard updated live. Also tested inside the container: 37 of 37. Live data reset afterwards.
 - Question: why has botswarm.site not reached the registry? Ask the Hostinger booth if it is still missing.
+
+**18:29:14** Demo setup for the peer review (Tom): three pages, only real people plus a bot swarm launched on demand.
+- Added the attack console (`dashboard/static/attack.html`, `/attack`, `attack.<domain>`): unlock with the demo key, launch one campaign at a time (naive-bot 12, alias-farm 10, stealth-farm 15, humanlike 6 signups), see each verdict, score and reason, stop, reset. The server runs the campaign and posts to its own public signup API over HTTP; each launch sends a fixed number and stops.
+- Decision: simulated customers switched off in production (`GUARD_SIM_EVERY=0`), so the dashboard shows only real visitors and the launched swarm. The two-week simulated history stays as the timing baseline only and is no longer shown as users; the dashboard says so.
+- Dashboard: the score formula replaces the simulated-customer tile.
+- Deployed: https://trial.179-67-199-198.sslip.io, https://guard.179-67-199-198.sslip.io, https://attack.179-67-199-198.sslip.io (Caddy now also serves `attack.`). Live check: naive-bot 12 of 12 blocked at score 100, no simulated users; reset to 0 afterwards. Tests: 62 passing.
+- Note: if botswarm.site starts resolving, an `attack` A record is also needed.

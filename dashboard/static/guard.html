@@ -33,6 +33,13 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 .tile .label { color: var(--fg2); font-size: 14px; margin-top: 6px; }
 .tile .split { display: flex; gap: 12px; margin-top: 10px; font: 500 13px var(--mono); flex-wrap: wrap; }
 .tile.attack { border-top: 3px solid var(--attack); } .tile.visitor { border-top: 3px solid var(--visitor); } .tile.sim { border-top: 3px solid var(--sim); }
+.tiles .formula { grid-column: span 2; }
+@media (min-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr 2.3fr 1.3fr; } .tiles .formula { grid-column: auto; } }
+@media (max-width: 760px) { .tiles .formula { grid-column: auto; } .formula .cols { grid-template-columns: 1fr; } }
+.formula .eq { font: 600 16px var(--mono); margin-bottom: 8px; }
+.formula .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
+.formula .cols b { color: var(--fg); font-family: var(--mono); }
+.formula .sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
 .b { color: var(--block); } .r { color: var(--review); } .a { color: var(--allow); }
 .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
@@ -96,12 +103,19 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </header>
 
   <div class="tiles">
-    <div class="panel tile attack"><div class="big" id="atkBig">0</div><div class="label">attack signups (from the attack script)</div>
+    <div class="panel tile attack"><div class="big" id="atkBig">0</div><div class="label">bot swarm signups</div>
       <div class="split" id="atkSplit"></div></div>
     <div class="panel tile visitor"><div class="big" id="visBig">0</div><div class="label">real visitors on the trial page</div>
       <div class="split" id="visSplit"></div></div>
-    <div class="panel tile sim"><div class="big" id="simBig">0</div><div class="label">simulated ordinary customers</div>
-      <div class="split" id="simSplit"></div></div>
+    <div class="panel formula"><h2>How the bot score is made</h2>
+      <div class="eq">score = max( <b>signup checks</b>, <b>group verdict</b> )</div>
+      <div class="cols"><div><div class="sub">signup checks (added up)</div>
+        <div>throwaway inbox <b>+45</b></div><div>same inbox, other spelling <b>+50</b></div><div>automation browser <b>+50</b></div>
+        <div>hidden field filled <b>+60</b></div><div>form filled under 1.5 s <b>+30</b></div><div>device behind 5+ accounts <b>+35</b></div>
+        <div>device behind 2–4 accounts <b>+5 each</b></div><div>datacenter / VPN <b>+10</b></div><div>no device check <b>+10</b></div></div>
+        <div><div class="sub">group verdict (linked signups)</div>
+        <div>swarm blocked <b>90</b></div><div>swarm to review <b>55</b></div><div>school / company <b>40</b></div>
+        <div class="sub" style="margin-top:8px">action</div><div><span class="a">0–34 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></div></div></div></div>
     <div class="panel qr"><div id="qr" aria-label="QR code to the trial page"></div>
       <div><h2 style="margin-bottom:4px">Try to get past it</h2><div class="url" id="trialUrl"></div>
         <div class="meta" style="margin-top:6px">Sign up from your own phone. Then try to farm accounts.</div></div></div>
@@ -116,7 +130,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   <div class="two">
     <div class="panel mini"><h2>Bot scores right now (live signups)</h2>
       <svg id="liveHist" viewBox="0 0 500 120" preserveAspectRatio="none" role="img" aria-label="Live bot score distribution by source"></svg>
-      <div class="legend"><span style="--c: var(--attack)">attack script</span><span style="--c: var(--visitor)">real visitors</span><span style="--c: var(--sim)">simulated customers</span></div>
+      <div class="legend"><span style="--c: var(--attack)">bot swarm</span><span style="--c: var(--visitor)">real visitors</span></div>
       <div class="cap">Bot score 0 to 100. Under 35 allowed, 35 to 59 review, 60 and over blocked.</div></div>
     <div class="panel mini"><h2>How the score was tested (forged bot activity logs)</h2>
       <div id="tested"><p class="empty">No evaluation file yet.</p></div></div>
@@ -127,8 +141,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
       <h2 style="margin-top:18px">Attack campaigns (answer key from the attack script)</h2><div id="campaigns"><p class="empty">No attack yet.</p></div></div>
     <div class="panel"><h2>People being scored live</h2><div class="feed" id="feed"><p class="empty">Waiting for the first signup…</p></div></div>
   </div>
-  <p class="meta">Emails are masked. The detector never sees which signups come from the attack script; that label is only used for the scoreboard.
-    Simulated customers keep normal traffic flowing; real visitors are people using the trial page. History: two weeks of simulated ordinary signups.</p>
+  <p class="meta">Emails are masked. Only real visitors and the bot swarm launched from the console appear here. The detector never sees which signups the console sent; that label only feeds the scoreboard.
+    Timing tests compare each group against two weeks of past signups (a simulated baseline that is never shown as users).</p>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
@@ -207,8 +221,7 @@ function render(s) {
   const sb = s.scoreboard;
   $("atkBig").textContent = sb.attack.total; $("atkSplit").innerHTML = split(sb.attack, false);
   $("visBig").textContent = sb.visitor.total; $("visSplit").innerHTML = split(sb.visitor, true);
-  $("simBig").textContent = sb.simulated.total; $("simSplit").innerHTML = split(sb.simulated, true);
-  $("meta").textContent = `${s.recent_30min} signups in the last 30 min · ${s.live_rows} live · ${s.history_rows.toLocaleString()} history · ${clock(s.now)}`;
+  $("meta").textContent = `${s.live_rows} live signups · ${clock(s.now)}`;
   drawBars(s.timeline);
   $("groups").innerHTML = s.groups.length ? s.groups.map((g) => `<div class="group"><header><span class="chip ${esc(g.action)}">${esc(g.action)}</span>
       <b>${g.size} linked signups</b><span class="meta">${g.attack} from the attack script</span></header>

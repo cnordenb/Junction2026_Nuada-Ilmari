@@ -1,5 +1,5 @@
 # HTTPS certificates are fetched automatically once the DNS records point here.
-{$DOMAIN}, trial.{$DOMAIN}, guard.{$DOMAIN} {
+{$DOMAIN}, trial.{$DOMAIN}, guard.{$DOMAIN}, attack.{$DOMAIN} {
 	encode gzip
 	header -Server
 	reverse_proxy app:8000 {

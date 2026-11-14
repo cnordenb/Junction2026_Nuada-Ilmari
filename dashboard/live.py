@@ -376,3 +376,107 @@ def trial_page() -> FileResponse:
 @router.get("/guard")
 def guard_page() -> FileResponse:
     return FileResponse(STATIC / "guard.html", media_type="text/html")
+
+
+# ---------------------------------------------------------------- attack console
+# The attack runs inside the server and posts to the public signup API over
+# HTTP, exactly like the command-line attack script. Each launch sends a fixed
+# number of signups and stops; nothing repeats on its own.
+
+import sys as _sys  # noqa: E402
+import urllib.error  # noqa: E402
+import urllib.request  # noqa: E402
+
+_sys.path.insert(0, str(ROOT / "scripts"))
+import attack_demo  # noqa: E402
+
+SELF_URL = os.environ.get("GUARD_SELF_URL", "http://127.0.0.1:8000")
+CAMPAIGN_INFO = {
+    "naive-bot": "A script posting straight to the signup API: throwaway inboxes, user12345 names, "
+                 "fills the hidden field, never runs the page.",
+    "alias-farm": "One Gmail inbox multiplied with dots and +tags, from a real-looking browser.",
+    "stealth-farm": "Realistic names, a normal browser string, human-speed form filling, but only 3 "
+                    "devices behind every account. Each signup looks fine on its own.",
+    "humanlike": "Varies every detail and waits between signups. We expect this one to be hard to catch.",
+}
+_attack: dict = {"running": False, "stop": False, "campaign": None, "sent": 0, "total": 0, "log": [], "runs": 0}
+_attack_lock = threading.Lock()
+
+
+def _run_attack(campaign: str, speed: float) -> None:
+    rng = random.Random()
+    items = list(attack_demo.CAMPAIGNS[campaign](rng))
+    with _attack_lock:
+        _attack.update(running=True, stop=False, campaign=campaign, sent=0, total=len(items))
+    try:
+        for body, ua, delay in items:
+            if _attack["stop"]:
+                break
+            req = urllib.request.Request(SELF_URL + "/api/trial/signup", data=json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json", "User-Agent": ua,
+                                                  "X-Demo-Truth": f"{DEMO_KEY}:{campaign}"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as res:
+                    r = json.loads(res.read())
+            except (urllib.error.URLError, ValueError) as exc:
+                r = {"action": "error", "reasons": [str(exc)[:120]]}
+            entry = {"t": time.time(), "campaign": campaign, "email": body["email"], "action": r.get("action"),
+                     "score": r.get("score"), "ticket": r.get("ticket"),
+                     "reason": (r.get("reasons") or [""])[0][:240]}
+            with _attack_lock:
+                _attack["sent"] += 1
+                _attack["log"] = (_attack["log"] + [entry])[-200:]
+            time.sleep(delay / max(speed, 0.1))
+    finally:
+        with _attack_lock:
+            _attack.update(running=False, runs=_attack["runs"] + 1)
+
+
+class AttackStart(BaseModel):
+    campaign: str
+    speed: float = Field(default=1.0, ge=0.25, le=5)
+
+
+@router.post("/api/attack/start")
+def attack_start(item: AttackStart, request: Request) -> dict:
+    _check_key(request)
+    if item.campaign not in attack_demo.CAMPAIGNS:
+        raise HTTPException(400, f"Unknown campaign. Choose from {', '.join(attack_demo.CAMPAIGNS)}.")
+    with _attack_lock:
+        if _attack["running"]:
+            raise HTTPException(409, f"{_attack['campaign']} is still running. Wait or stop it first.")
+        _attack["running"] = True
+    threading.Thread(target=_run_attack, args=(item.campaign, item.speed), daemon=True).start()
+    return {"ok": True}
+
+
+@router.post("/api/attack/stop")
+def attack_stop(request: Request) -> dict:
+    _check_key(request)
+    _attack["stop"] = True
+    return {"ok": True}
+
+
+@router.post("/api/attack/clear-log")
+def attack_clear(request: Request) -> dict:
+    _check_key(request)
+    with _attack_lock:
+        _attack["log"] = []
+    return {"ok": True}
+
+
+@router.get("/api/attack/status")
+def attack_status(request: Request) -> dict:
+    _check_key(request)
+    with _attack_lock:
+        state = {k: _attack[k] for k in ("running", "campaign", "sent", "total", "runs")}
+        state["log"] = list(reversed(_attack["log"][-60:]))
+    sizes = {name: len(list(gen(random.Random(0)))) for name, gen in attack_demo.CAMPAIGNS.items()}
+    state["campaigns"] = [{"name": n, "signups": sizes[n], "about": CAMPAIGN_INFO.get(n, "")}
+                          for n in attack_demo.CAMPAIGNS]
+    return state
+
+
+@router.get("/attack")
+def attack_page() -> FileResponse:
+    return FileResponse(STATIC / "attack.html", media_type="text/html")

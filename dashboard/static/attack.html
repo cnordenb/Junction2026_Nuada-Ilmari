@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swarm Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* The attacker's laptop: a red-team console. Dark, monospaced log, one action per campaign. */
+:root {
+  --bg: #120d0e; --panel: #1c1415; --panel2: #261b1c; --fg: #f4eeee; --fg2: #c4b3b4; --muted: #8a7778; --line: #3a2a2b;
+  --red: #ff5c52; --amber: #f2b84b; --green: #4fd08a;
+  --display: "Space Grotesk", system-ui, sans-serif; --body: "Inter", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+.wrap { max-width: 1300px; margin: 0 auto; padding: 20px max(16px, env(safe-area-inset-left, 0px)) 48px; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+h1 { font: 700 26px var(--display); margin: 0; }
+h1 span { color: var(--red); }
+a { color: var(--fg2); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+h2 { font: 600 13px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--fg2); margin: 0 0 10px; }
+.key { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input { font: 14px var(--mono); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; min-width: 260px; }
+button { font: 600 14px var(--body); color: var(--fg); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--fg2); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.launch { background: var(--red); border-color: var(--red); color: #1a0606; width: 100%; padding: 11px; font-size: 15px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { display: flex; flex-direction: column; gap: 8px; }
+.card h3 { font: 700 18px var(--mono); margin: 0; }
+.card .n { font: 500 13px var(--mono); color: var(--amber); }
+.card p { color: var(--fg2); font-size: 14px; margin: 0; flex: 1; }
+.status { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.bar { flex: 1 1 260px; height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--red); width: 0; transition: width .4s; }
+.mono { font-family: var(--mono); }
+.tally { display: flex; gap: 18px; font: 600 15px var(--mono); }
+.b { color: var(--red); } .r { color: var(--amber); } .a { color: var(--green); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; color: var(--fg2); font-size: 12px; font-weight: 600; }
+th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.mono { font-size: 13px; overflow-wrap: anywhere; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.scroll { overflow-x: auto; }
+.msg { color: var(--amber); font-size: 14px; }
+.row-new { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: rgba(255, 92, 82, .2); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .row-new { animation: none; } .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Swarm <span>Console</span></h1>
+    <nav class="mono" style="font-size:13px"><a id="lnkTrial" href="/trial">target: trial site</a> · <a id="lnkGuard" href="/guard">defender: guard dashboard</a></nav>
+  </header>
+
+  <div class="panel">
+    <h2>Demo key</h2>
+    <div class="key"><input id="key" type="password" autocomplete="off" placeholder="paste GUARD_DEMO_KEY" aria-label="Demo key">
+      <button id="saveKey">Unlock</button><span id="keyMsg" class="msg"></span></div>
+  </div>
+
+  <div class="panel">
+    <h2>Launch a fake-account campaign (each sends a fixed number of signups, then stops)</h2>
+    <div class="cards" id="cards"><p class="msg">Unlock with the demo key to see the campaigns.</p></div>
+  </div>
+
+  <div class="panel">
+    <h2>Now</h2>
+    <div class="status">
+      <span class="mono" id="now">idle</span>
+      <div class="bar"><i id="prog"></i></div>
+      <div class="tally"><span class="b" id="tb">0 blocked</span><span class="r" id="tr">0 review</span><span class="a" id="ta">0 got in</span></div>
+      <button id="stop" disabled>Stop</button>
+      <button id="clear">Clear log</button>
+      <button id="reset">Reset demo (all live signups)</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What the site answered, signup by signup</h2>
+    <div class="scroll"><table><thead><tr><th>Campaign</th><th>Email used</th><th>Verdict</th><th style="text-align:right">Score</th><th>Why (the guard's reason)</th></tr></thead>
+      <tbody id="log"><tr><td colspan="5" class="msg">Nothing sent yet.</td></tr></tbody></table></div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const host = location.hostname;
+if (host.startsWith("attack.")) {
+  const base = host.slice(7);
+  $("lnkTrial").href = `${location.protocol}//trial.${base}`; $("lnkGuard").href = `${location.protocol}//guard.${base}`;
+}
+let key = "";
+try { key = sessionStorage.getItem("demoKey") || ""; } catch (e) {}
+$("key").value = key;
+
+async function call(path, opts = {}) {
+  const res = await fetch(path, {...opts, headers: {"Content-Type": "application/json", "X-Demo-Key": key, ...(opts.headers || {})}});
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Request failed (${res.status})`);
+  return body;
+}
+
+$("saveKey").onclick = () => { key = $("key").value.trim(); try { sessionStorage.setItem("demoKey", key); } catch (e) {} poll(true); };
+
+let cardsDrawn = false, seen = new Set();
+function drawCards(list, running) {
+  if (!cardsDrawn) {
+    $("cards").innerHTML = list.map((c) => `<div class="panel card" style="background:var(--panel2)"><h3>${esc(c.name)}</h3>
+      <span class="n">${c.signups} signups</span><p>${esc(c.about)}</p>
+      <button class="launch" data-c="${esc(c.name)}">Launch ${esc(c.name)}</button></div>`).join("");
+    $("cards").querySelectorAll("button.launch").forEach((b) => b.onclick = async () => {
+      try { await call("/api/attack/start", {method: "POST", body: JSON.stringify({campaign: b.dataset.c})}); poll(); }
+      catch (e) { $("keyMsg").textContent = e.message; }
+    });
+    cardsDrawn = true;
+  }
+  $("cards").querySelectorAll("button.launch").forEach((b) => b.disabled = running);
+}
+
+async function poll(once) {
+  try {
+    const s = await call("/api/attack/status");
+    $("keyMsg").textContent = "";
+    drawCards(s.campaigns, s.running);
+    $("stop").disabled = !s.running;
+    $("now").textContent = s.running ? `${s.campaign}: ${s.sent} of ${s.total} sent` : (s.campaign ? `${s.campaign} finished (${s.sent} sent)` : "idle");
+    $("prog").style.width = s.total ? `${100 * s.sent / s.total}%` : "0";
+    const cur = s.log.filter((r) => r.campaign === s.campaign);
+    const n = (a) => cur.filter((r) => r.action === a).length;
+    $("tb").textContent = `${n("block")} blocked`; $("tr").textContent = `${n("review")} review`; $("ta").textContent = `${n("allow")} got in`;
+    $("log").innerHTML = s.log.length ? s.log.map((r) => {
+      const id = `${r.t}-${r.email}`, isNew = !seen.has(id); seen.add(id);
+      const cls = r.action === "block" ? "b" : r.action === "review" ? "r" : r.action === "allow" ? "a" : "";
+      return `<tr class="${isNew ? "row-new" : ""}"><td class="mono">${esc(r.campaign)}</td><td class="mono">${esc(r.email)}</td>
+        <td class="${cls} mono">${esc((r.action || "").toUpperCase())}</td><td class="num ${cls}">${r.score ?? "–"}</td><td>${esc(r.reason || (r.action === "allow" ? "No check failed yet." : ""))}</td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="msg">Nothing sent yet.</td></tr>`;
+  } catch (e) {
+    $("keyMsg").textContent = key ? e.message : "";
+  }
+  if (!once) setTimeout(poll, 1000);
+}
+$("stop").onclick = () => call("/api/attack/stop", {method: "POST"}).catch((e) => $("keyMsg").textContent = e.message);
+$("clear").onclick = () => { seen = new Set(); call("/api/attack/clear-log", {method: "POST"}).catch((e) => $("keyMsg").textContent = e.message); };
+$("reset").onclick = async () => {
+  if ($("reset").dataset.armed !== "1") { $("reset").dataset.armed = "1"; $("reset").textContent = "Click again to reset"; setTimeout(() => { $("reset").dataset.armed = ""; $("reset").textContent = "Reset demo (all live signups)"; }, 4000); return; }
+  try { await call("/api/guard/reset", {method: "POST"}); await call("/api/attack/clear-log", {method: "POST"}); seen = new Set(); $("keyMsg").textContent = "Demo reset."; }
+  catch (e) { $("keyMsg").textContent = e.message; }
+  $("reset").dataset.armed = ""; $("reset").textContent = "Reset demo (all live signups)";
+};
+poll();
+</script>
+</body>
+</html>
