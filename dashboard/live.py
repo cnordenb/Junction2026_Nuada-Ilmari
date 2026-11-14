@@ -227,7 +227,9 @@ def _rate_ok(ip: str, limit: int = 600, per: float = 3600) -> bool:
 @router.post("/api/trial/signup")
 def trial_signup(item: TrialSignup, request: Request) -> dict:
     if "@" not in item.email or "." not in item.email.rsplit("@", 1)[-1]:
-        raise HTTPException(400, "Please enter a valid email address.")
+        raise HTTPException(400, "Please enter a valid email address, bestie.")
+    if not item.business.strip():
+        raise HTTPException(400, "Your horse needs a name. No nameless horses on Neighbr.")
     ip = _client_ip(request)
     if not _rate_ok(ip):
         raise HTTPException(429, "Too many signups from this address. Try again later.")

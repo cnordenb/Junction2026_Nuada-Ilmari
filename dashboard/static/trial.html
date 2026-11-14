@@ -125,7 +125,7 @@ footer a { color: var(--fg2); }
         <label for="email">Email (your human can type it)</label>
         <input id="email" name="email" type="email" required maxlength="200" placeholder="sir.trotsalot@paddock.fi">
         <label for="business">Your horse's name</label>
-        <input id="business" name="business" type="text" maxlength="100" placeholder="Neigh-thaniel">
+        <input id="business" name="business" type="text" required maxlength="100" placeholder="Neigh-thaniel">
         <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
         <button class="submit" id="submit" type="submit">Giddy up 🐴</button>
         <div id="result" class="result" role="status"></div>
@@ -282,6 +282,9 @@ if (host.startsWith("trial.")) document.getElementById("guardLink").href = locat
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const out = document.getElementById("result"), btn = document.getElementById("submit");
+  const email = document.getElementById("email").value.trim(), horse = document.getElementById("business").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { out.className = "result error"; out.textContent = "Please enter a valid email address, bestie."; document.getElementById("email").focus(); return; }
+  if (!horse) { out.className = "result error"; out.textContent = "Your horse needs a name. No nameless horses on Neighbr."; document.getElementById("business").focus(); return; }
   out.className = "result"; btn.disabled = true; btn.textContent = "Sargas is checking your vibe…";
   try {
     const res = await fetch("/api/trial/signup", {method: "POST", headers: {"Content-Type": "application/json"},

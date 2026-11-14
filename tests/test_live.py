@@ -32,7 +32,8 @@ def client():
 
 def signup(client, email, truth=None, **extra):
     headers = {"X-Demo-Truth": f"{os.environ['GUARD_DEMO_KEY']}:{truth}"} if truth else {}
-    body = {"email": email, "device_id": extra.pop("device_id", ""), "fill_ms": extra.pop("fill_ms", 8000), **extra}
+    body = {"email": email, "business": extra.pop("business", "Test Horse"), "device_id": extra.pop("device_id", ""),
+            "fill_ms": extra.pop("fill_ms", 8000), **extra}
     return client.post("/api/trial/signup", json=body, headers=headers).json()
 
 
