@@ -2,20 +2,22 @@
 
 Everything here is made up. The point is a dataset where the right answer is
 known, so the detector's precision, recall and false-positive rate can be
-measured. Columns: id, content, time_posted, label, note. The detector only
-reads content and time_posted; label and note are the answer key.
+measured. Columns: id, account, content, time_posted, label, note. The
+detector reads content, time_posted and (optionally) account; label and note
+are the answer key.
 
 Planted swarms (label starts with "swarm_"):
-    swarm_copypaste   40 near-identical posts within 6 minutes
-    swarm_template    36 posts from one template, in two 20-minute waves
-    swarm_schedule    30 near-identical posts exactly every 30 minutes
-    swarm_clock       24 near-identical posts at the top of random hours
-    swarm_paraphrase  16 posts with the same message in different words, within 10 minutes
+    swarm_copypaste   40 near-identical posts within 6 minutes, 40 throwaway accounts
+    swarm_template    36 posts from one template, in two 20-minute waves, 18 accounts posting twice
+    swarm_schedule    30 near-identical posts exactly every 30 minutes, one account
+    swarm_clock       24 near-identical posts at the top of random hours, two accounts
+    swarm_paraphrase  16 posts with the same message in different words, within 10 minutes, 16 accounts
 
 Innocent look-alikes (label "organic"):
     quote      one famous quote posted 25 times at unrelated times
     news       60 different reactions to one event within 15 minutes
-    greeting   the same morning greeting posted around 08:00 every day
+    greeting   the same morning greeting posted around 08:00 every day by three people
+    news feed  one account posting 72 different headlines around the clock
 
 Run:  python data/make_demo_data.py
 """
@@ -132,92 +134,157 @@ def at(day: float, hour: float = 0, minute: float = 0, second: float = 0) -> dat
     return START + timedelta(days=day, hours=hour, minutes=minute, seconds=second)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate the synthetic demo dataset.")
-    parser.add_argument("--background", type=int, default=N_BACKGROUND, help="number of ordinary posts (default 4000)")
-    parser.add_argument("--out", default=str(Path(__file__).with_name("demo_posts.csv")))
-    args = parser.parse_args()
-    rng = random.Random(2026)
-    rows: list[tuple[datetime, str, str, str]] = []
+class DemoData:
+    """Builds the rows (time, content, label, note, account). The sections draw
+    from two seeded random streams, so calling them in a different order gives
+    a different dataset; generate() is the one place that fixes the order."""
 
-    def add(when: datetime, content: str, label: str, note: str) -> None:
-        rows.append((when.replace(microsecond=0), content, label, note))
+    def __init__(self) -> None:
+        self.rng = random.Random(2026)
+        # Accounts use their own random stream so adding them does not change the posts.
+        self.arng = arng = random.Random(1917)
+        self.rows: list[tuple[datetime, str, str, str, str]] = []
+        # Ordinary accounts: a few very active, most posting now and then.
+        self.people = sorted({f"{arng.choice(NAMES).lower()}{arng.choice(['_', '.', ''])}"
+                              f"{arng.choice(PLACES).lower()}{arng.randrange(10, 99)}" for _ in range(1100)})[:900]
+        self.activity = [arng.paretovariate(1.3) for _ in self.people]
+        # People sleep: each ordinary account is silent for 7 hours a night (a few are night owls).
+        self.bedtime = {p: arng.choice([22, 23, 0, 1, 2]) if arng.random() < 0.9 else arng.choice([4, 6, 8])
+                        for p in self.people}
 
-    def organic_time() -> datetime:
+    def throwaway(self, stems: list[str]) -> str:
+        return f"{self.arng.choice(stems)}{self.arng.randrange(1000, 99999)}"
+
+    def someone_awake(self, when: datetime) -> str:
+        for _ in range(200):
+            person = self.arng.choices(self.people, weights=self.activity)[0]
+            if (when.hour - self.bedtime[person]) % 24 >= 7:
+                break
+        return person
+
+    def add(self, when: datetime, content: str, label: str, note: str, account: str | None = None) -> None:
+        self.rows.append((when.replace(microsecond=0), content, label, note, account or self.someone_awake(when)))
+
+    def organic_time(self) -> datetime:
+        rng = self.rng
         hour = rng.choices(range(24), weights=HOUR_WEIGHTS)[0]
         return at(rng.randrange(DAYS), hour, rng.randrange(60), rng.randrange(60))
 
-    # Ordinary, unrelated chatter.
-    for _ in range(args.background):
-        detail = rng.choice([
-            f"{rng.choice(NAMES)} from {rng.choice(PLACES)} told me",
-            f"After {rng.randrange(2, 40)} years in {rng.choice(PLACES)},",
-            f"Heard from {rng.choice(NAMES)} that",
-            f"Back in {rng.choice(PLACES)},",
-            "",
-        ])
-        text = " ".join(part for part in (
-            rng.choice(OPENERS), detail, rng.choice(SUBJECTS), rng.choice(PREDICATES) + ".", rng.choice(ENDINGS)) if part)
-        add(organic_time(), text, "organic", "background")
-    for _ in range(150):   # very short replies, below the clustering length limit
-        add(organic_time(), rng.choice(["lol", "this!", "thanks for sharing", "same here", "so true", "wow", "agreed 100%"]),
-            "organic", "short")
+    def chatter(self, n: int) -> None:
+        """Ordinary, unrelated posts, then very short replies below the clustering length limit."""
+        rng = self.rng
+        for _ in range(n):
+            detail = rng.choice([
+                f"{rng.choice(NAMES)} from {rng.choice(PLACES)} told me",
+                f"After {rng.randrange(2, 40)} years in {rng.choice(PLACES)},",
+                f"Heard from {rng.choice(NAMES)} that",
+                f"Back in {rng.choice(PLACES)},",
+                "",
+            ])
+            text = " ".join(part for part in (
+                rng.choice(OPENERS), detail, rng.choice(SUBJECTS), rng.choice(PREDICATES) + ".", rng.choice(ENDINGS)) if part)
+            self.add(self.organic_time(), text, "organic", "background")
+        for _ in range(150):
+            self.add(self.organic_time(), rng.choice(["lol", "this!", "thanks for sharing", "same here", "so true", "wow", "agreed 100%"]),
+                     "organic", "short")
 
-    # Innocent look-alikes.
-    for _ in range(25):
-        quote = "Be the change you wish to see in the world."
-        add(organic_time(), rng.choice([quote, quote + " - Gandhi", f'"{quote}"', quote + " Words to live by."]),
-            "organic", "quote")
-    for _ in range(60):
-        add(at(7, 18, 40, rng.uniform(0, 900)), f"{rng.choice(NEWS_A)} {rng.choice(NEWS_B)}. {rng.choice(NEWS_C)}",
-            "organic", "news")
-    for day in range(DAYS):
-        for _ in range(3):
-            add(at(day, 7, 30, rng.uniform(0, 3600)), "Good morning everyone, have a wonderful day!", "organic", "greeting")
+    def lookalikes(self) -> None:
+        """Innocent posts that resemble a swarm in text or in timing, but not both."""
+        rng = self.rng
+        for _ in range(25):
+            quote = "Be the change you wish to see in the world."
+            self.add(self.organic_time(), rng.choice([quote, quote + " - Gandhi", f'"{quote}"', quote + " Words to live by."]),
+                     "organic", "quote")
+        for _ in range(60):
+            self.add(at(7, 18, 40, rng.uniform(0, 900)), f"{rng.choice(NEWS_A)} {rng.choice(NEWS_B)}. {rng.choice(NEWS_C)}",
+                     "organic", "news")
+        for day in range(DAYS):
+            for who in ("marja_morning", "kahvi_kalle", "sunrise_sirpa"):   # three people with a daily ritual
+                self.add(at(day, 7, 30, rng.uniform(0, 3600)), "Good morning everyone, have a wonderful day!", "organic", "greeting", who)
 
-    # Swarm 1: copy-paste brigade.
-    for _ in range(40):
-        text = COPYPASTE
-        if rng.random() < 0.4:
-            text = text.replace("Share this", rng.choice(["Repost this", "Spread this", "Share it"]))
-        text += rng.choice([".", "!", "!!!", ". #recount", "! #harbourgate", ""])
-        if rng.random() < 0.3:
-            text = text.upper() if rng.random() < 0.3 else text.replace("rigged", "RIGGED")
-        add(at(2, 21, 14, rng.uniform(0, 360)), text, "swarm_copypaste", "copy-paste brigade")
+    def copypaste_brigade(self) -> None:
+        rng = self.rng
+        for _ in range(40):
+            text = COPYPASTE
+            if rng.random() < 0.4:
+                text = text.replace("Share this", rng.choice(["Repost this", "Spread this", "Share it"]))
+            text += rng.choice([".", "!", "!!!", ". #recount", "! #harbourgate", ""])
+            if rng.random() < 0.3:
+                text = text.upper() if rng.random() < 0.3 else text.replace("rigged", "RIGGED")
+            self.add(at(2, 21, 14, rng.uniform(0, 360)), text, "swarm_copypaste", "copy-paste brigade",
+                     self.throwaway(["truthteller", "harbourwatch", "citizen", "wakeup", "realvoter", "freevoice"]))
 
-    # Swarm 2: template astroturfing in two waves.
-    for wave_day, hour, minute in ((4, 14, 0), (5, 9, 30)):
-        for _ in range(18):
-            text = (f"I've been using the Solvera heat pump for {rng.randrange(2, 12)} "
-                    f"{rng.choice(['weeks', 'months'])} {rng.choice(TEMPLATE_PRAISE)}. "
-                    f"{rng.choice(['Best purchase this year', 'Best decision we made', 'Best upgrade ever'])}, "
-                    f"check out their autumn discount before it ends!")
-            add(at(wave_day, hour, minute, rng.uniform(0, 1200)), text, "swarm_template", "template astroturfing")
+    def template_astroturfing(self) -> None:
+        """One template, two waves; each account posts once per wave."""
+        rng, arng = self.rng, self.arng
+        reviewers = [f"{arng.choice(NAMES).lower()}_{arng.choice('abcdefghjklmnprstv')}{arng.randrange(60, 99)}" for _ in range(18)]
+        for wave_day, hour, minute in ((4, 14, 0), (5, 9, 30)):
+            arng.shuffle(reviewers)
+            for who in reviewers:
+                text = (f"I've been using the Solvera heat pump for {rng.randrange(2, 12)} "
+                        f"{rng.choice(['weeks', 'months'])} {rng.choice(TEMPLATE_PRAISE)}. "
+                        f"{rng.choice(['Best purchase this year', 'Best decision we made', 'Best upgrade ever'])}, "
+                        f"check out their autumn discount before it ends!")
+                self.add(at(wave_day, hour, minute, rng.uniform(0, 1200)), text, "swarm_template", "template astroturfing", who)
 
-    # Swarm 3: scheduled bot, every 30 minutes.
-    for k in range(30):
-        text = f"{SCHEDULE} here: watersafe-report.example/{rng.randrange(1000, 9999)}"
-        add(at(1, 0, 7 + 30 * k, rng.uniform(-3, 3)), text, "swarm_schedule", "posts every 30 minutes")
+    def bots(self) -> None:
+        """A timer bot (every 30 minutes) and a clock bot (top of the hour, irregular hours)."""
+        rng = self.rng
+        for k in range(30):
+            text = f"{SCHEDULE} here: watersafe-report.example/{rng.randrange(1000, 9999)}"
+            self.add(at(1, 0, 7 + 30 * k, rng.uniform(-3, 3)), text, "swarm_schedule", "posts every 30 minutes", "watersafe_alerts")
+        hours = rng.sample(range(3 * 24, 9 * 24), 24)
+        for k, h in enumerate(hours):
+            text = CLOCK + rng.choice([".", "!", " today.", " now!", " - DM open."])
+            self.add(at(0, h, 0, rng.uniform(0, 6)), text, "swarm_clock", "posts at the top of the hour",
+                     ("boost_agency", "growthdeals24")[k % 2])
 
-    # Swarm 4: clock bot, top of the hour at irregular hours.
-    hours = rng.sample(range(3 * 24, 9 * 24), 24)
-    for h in hours:
-        text = CLOCK + rng.choice([".", "!", " today.", " now!", " - DM open."])
-        add(at(0, h, 0, rng.uniform(0, 6)), text, "swarm_clock", "posts at the top of the hour")
+    def reworded_swarm(self) -> None:
+        """Same message reworded, synchronised. Lexical matching should miss this."""
+        for text in PARAPHRASE:
+            self.add(at(6, 12, 5, self.rng.uniform(0, 600)), text, "swarm_paraphrase", "reworded copies",
+                     self.throwaway(["taxpayer", "localvoice", "concerned_resident", "commuter"]))
 
-    # Swarm 5: same message reworded, synchronised. Lexical matching should miss this.
-    for text in PARAPHRASE:
-        add(at(6, 12, 5, rng.uniform(0, 600)), text, "swarm_paraphrase", "reworded copies")
+    def news_feed(self) -> None:
+        """Automated and around the clock, but every post is different and nothing
+        about it is coordinated. Automated is not the same as malicious."""
+        arng = self.arng
+        for _ in range(72):
+            text = f"{arng.choice(['News:', 'Update:', 'Just in:', 'Local:'])} {arng.choice(SUBJECTS)} {arng.choice(PREDICATES)}."
+            self.add(at(arng.randrange(DAYS), arng.randrange(24), arng.randrange(60), arng.randrange(60)),
+                     text, "organic", "news feed", "harbour_daily_news")
 
-    rows.sort(key=lambda r: r[0])
-    out = Path(args.out)
+
+def generate(background: int = N_BACKGROUND) -> list[tuple[datetime, str, str, str, str]]:
+    """All rows, oldest first."""
+    data = DemoData()
+    data.chatter(background)
+    data.lookalikes()
+    data.copypaste_brigade()
+    data.template_astroturfing()
+    data.bots()
+    data.reworded_swarm()
+    data.news_feed()
+    return sorted(data.rows, key=lambda r: r[0])
+
+
+def write(rows: list[tuple[datetime, str, str, str, str]], out: Path) -> None:
     with out.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["id", "content", "time_posted", "label", "note"])
-        for k, (when, content, label, note) in enumerate(rows, 1):
-            writer.writerow([k, content, when.strftime("%Y-%m-%d %H:%M:%S"), label, note])
+        writer.writerow(["id", "account", "content", "time_posted", "label", "note"])
+        for k, (when, content, label, note, account) in enumerate(rows, 1):
+            writer.writerow([k, account, content, when.strftime("%Y-%m-%d %H:%M:%S"), label, note])
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Generate the synthetic demo dataset.")
+    parser.add_argument("--background", type=int, default=N_BACKGROUND, help="number of ordinary posts (default 4000)")
+    parser.add_argument("--out", default=str(Path(__file__).with_name("demo_posts.csv")))
+    args = parser.parse_args(argv)
+    rows = generate(args.background)
+    write(rows, Path(args.out))
     swarm = sum(r[2] != "organic" for r in rows)
-    print(f"Wrote {out} with {len(rows)} posts, {swarm} of them in planted swarms.")
+    print(f"Wrote {args.out} with {len(rows)} posts, {swarm} of them in planted swarms.")
 
 
 if __name__ == "__main__":

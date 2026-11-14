@@ -1,0 +1,3 @@
+# Optional: enables --semantic and the "compare meaning" option in the dashboard.
+# Pulls in PyTorch (large download) and fetches a small model on first use.
+sentence-transformers==6.3.0

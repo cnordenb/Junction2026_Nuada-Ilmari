@@ -1,6 +1,6 @@
 ---
 name: swarm-detect
-description: Detect inauthentic or suspicious swarm behaviour (brigading, astroturfing, bot networks, copy-paste campaigns) in a dataset of posts or comments that has content and a time posted. Use when asked to check a dataset for coordinated posting, to score how similar posts are or how synchronised their timing is, to find posts like a few suspicious examples, or to measure the detector's precision and false-positive rate on labelled data.
+description: Detect inauthentic or suspicious swarm behaviour (brigading, astroturfing, bot networks, copy-paste campaigns) in a dataset of posts or comments that has content and a time posted, and type the accounts behind them (automated-looking, repetitive, swarm participant, single-purpose) when the data has an account column. Use when asked to check a dataset for coordinated posting or bot-like accounts, to score how similar posts are or how synchronised their timing is, to find posts like a few suspicious examples, or to measure the detector's precision and false-positive rate on labelled data.
 ---
 
 # Swarm detection
@@ -14,6 +14,7 @@ and flags groups that have both. Three scripts in `scripts/` do the work:
 | `similarity_score.py` | text similarity | 100 = identical (ignoring case, punctuation, spacing), 0 = no shared words or character runs |
 | `sync_score.py` | temporal synchrony | 100 = same instant, 0 = far apart with no timing pattern beyond chance |
 | `detect_swarm.py` | swarm score = sqrt(similarity x synchrony) | needs both to be high |
+| `account_types.py` | four account signals and a behaviour type | used by `detect_swarm.py` when there is an account column |
 
 Run them with the project's Python: `.venv/Scripts/python.exe` on Windows,
 `.venv/bin/python` elsewhere. If there is no `.venv`, create one and
@@ -26,6 +27,10 @@ Run them with the project's Python: `.venv/Scripts/python.exe` on Windows,
    `--text-col` / `--time-col` when the guess could be wrong. Formats: CSV,
    TSV, JSON array, JSON Lines. Times: ISO dates or Unix epochs, taken as UTC
    when no zone is given; ambiguous dates like 3/4/2026 are read month first.
+   Check for an account column too. One named `account`, `author`, `user_id`,
+   `username` or similar is picked up automatically; otherwise pass
+   `--account-col <name>`. Without one, accounts cannot be typed and a group
+   from one account cannot be told apart from a group of many.
 2. **Run the detector.**
    ```
    python scripts/detect_swarm.py <file>
@@ -85,6 +90,28 @@ The synchrony score is the highest of the four and names its pattern.
 **Verdicts.** `strong`: swarm score 70+, 8+ posts. `moderate`: swarm score
 45+. `low`: similar text, ordinary timing; not flagged.
 
+## Account types
+
+With an account column, every flagged cluster says how many accounts wrote it
+("40 different accounts", "all from one account"), and every account gets
+four signals (0 to 100) and a type. First matching type wins:
+
+| Type | Rule | Flagged |
+|---|---|---|
+| Automated-looking | `schedule` 50+ (timer, same minute of the hour, or same time of day; needs 8+ posts) or `no_pause` 50+ (no daily quiet period; needs 30+ posts over 3+ days) | yes |
+| Repetitive | `repetition` at or above the similarity threshold: its own posts repeat each other (needs 3+ posts) | yes |
+| Swarm participant | 3+ posts, and half or more are in flagged clusters | yes |
+| Single-purpose | 1 or 2 posts, all in flagged clusters | yes |
+| Occasional participant | some posts in flagged clusters, less than half | no |
+| No signals | 3+ posts, nothing unusual | no |
+| Too few posts to judge | 1 or 2 posts, none flagged | no |
+
+Read the type as a description of behaviour in this dataset, not as "bot" or
+"human". A news feed, a scheduling tool and a person who says good morning at
+eight every day all come out as automated-looking. A single-purpose account
+is only suspicious because of the cluster it sits in. Accounts with too few
+posts are unjudged, not cleared.
+
 ## The single-score scripts
 
 ```
@@ -111,7 +138,12 @@ look like. Check each flagged cluster against them:
 - **Platform or tool output**: "[removed]", auto-moderator notices, share-button text ("I just signed this petition").
 - **Giveaways and replies to a prompt** ("comment YES to enter").
 - **One author**: with no account column, one person reposting their own text
-  looks the same as many accounts. Say so; do not assume many accounts.
+  looks the same as many accounts. Say so; do not assume many accounts. With
+  an account column, read the cluster's account line: one account repeating
+  itself is spam-like, not a swarm.
+- **Benign automation**: news feeds, scheduled posts, service bots. They are
+  typed automated-looking and that is accurate; it is not a finding of abuse
+  unless they also sit in flagged clusters.
 
 What the detector misses: campaigns that reword every post, campaigns spread
 thinly over time with no pattern, and anything under the minimum cluster size.
@@ -126,8 +158,12 @@ thinly over time with no pattern, and anything under the minimum cluster size.
 - Describe patterns, not people. Write "40 near-identical posts within six
   minutes", not "a bot network". Never call an individual post or author a bot
   on this evidence; the scores cannot show who is behind a post.
-- State the limits that apply: no account ids, lexical matching only (unless
-  `--semantic` was used), rows skipped.
+- If accounts were typed, give the count per type and name the most notable
+  accounts with the reason the script printed. Keep "automated-looking" and
+  "malicious" apart, and say which automated-looking accounts never appear in
+  a flagged cluster.
+- State the limits that apply: no account column, lexical matching only
+  (unless `--semantic` was used), rows skipped.
 - If labels were available, report precision, recall and false-positive rate
   with the counts behind them.
 
@@ -135,6 +171,8 @@ thinly over time with no pattern, and anything under the minimum cluster size.
 
 The same detection runs behind a web page: `uvicorn dashboard.app:app`, then
 open http://127.0.0.1:8000. Datasets placed in `data/` appear in its list;
-others can be uploaded. `data/demo_posts.csv` is a synthetic dataset with
-planted swarms and an answer key (`label` column); regenerate it with
+others can be uploaded. Results are in tabs: Overview, Groups, Accounts,
+Timing, Sample matches, Accuracy, Limits. `data/demo_posts.csv` is a
+synthetic dataset with planted swarms, accounts and an answer key (`label`
+column); regenerate it with
 `python data/make_demo_data.py`. Tests: `python -m pytest`.

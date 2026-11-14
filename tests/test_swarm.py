@@ -11,10 +11,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).absolute().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT))
 
+from account_types import classify, longest_daily_quiet_hours  # noqa: E402
 from detect_swarm import analyse  # noqa: E402
 from similarity_score import SimilarityIndex, find_clusters, pair_similarity, score_dataset  # noqa: E402
 from swarm_common import (guess_columns, load_dataset, normalise, parse_duration, parse_times,  # noqa: E402
@@ -157,10 +158,13 @@ def test_parse_duration():
 
 
 def test_guess_columns():
-    assert guess_columns(["id", "content", "time_posted", "label"]) == {"text": "content", "time": "time_posted", "id": "id"}
-    guess = guess_columns(["author", "msg", "time_posted"])
+    assert guess_columns(["id", "content", "time_posted", "label"]) == {
+        "text": "content", "time": "time_posted", "id": "id", "account": None}
+    guess = guess_columns(["Author", "msg", "time_posted"])
     assert guess["time"] == "time_posted" and guess["text"] is None      # "post" must not match the time column
-    assert guess_columns(["Tweet", "Created_At", "video"])["id"] is None
+    assert guess["account"] == "Author"
+    guess = guess_columns(["Tweet", "Created_At", "video", "user_agent"])
+    assert guess["id"] is None and guess["account"] is None              # exact names only
 
 
 def test_load_json_and_jsonl_and_dropped_rows(tmp_path):
@@ -187,7 +191,7 @@ def test_load_reports_missing_columns(tmp_path):
 
 @pytest.fixture(scope="module")
 def demo_report():
-    return analyse(load_dataset(DEMO, label_col="label"))
+    return analyse(load_dataset(DEMO, label_col="label", account_col="auto"))
 
 
 def test_demo_planted_swarms_are_flagged(demo_report):
@@ -207,7 +211,7 @@ def test_demo_known_limits_are_what_the_docs_say(demo_report):
 def test_demo_innocent_lookalikes_are_not_flagged(demo_report):
     ds = load_dataset(DEMO, label_col="note")
     flagged_ids = {i for c in demo_report["clusters"] if c["verdict"] != "low" for i in c["post_ids"]}
-    for note in ("quote", "news", "background", "short"):
+    for note in ("quote", "news", "background", "short", "news feed"):
         hits = [i for i, n in zip(ds.ids, ds.labels) if n == note and i in flagged_ids]
         assert not hits, f"{note}: {len(hits)} posts flagged"
     quote = [c for c in demo_report["clusters"] if "Be the change" in c["posts"][0]["content"]]
@@ -239,6 +243,78 @@ def test_seed_with_no_match_and_tiny_dataset():
     json.dumps(report)      # report must be JSON-serialisable
 
 
+# ---------------------------------------------------------------- account types
+
+def test_classify_rules():
+    quiet = {"schedule": 0, "no_pause": 0, "repetition": 0, "swarm": 0}
+    assert classify(10, 0, quiet, 60) == "no_signals"
+    assert classify(2, 0, quiet, 60) == "too_few"
+    assert classify(1, 1, {**quiet, "swarm": 100}, 60) == "single_purpose"
+    assert classify(6, 4, {**quiet, "swarm": 66.7}, 60) == "swarm_participant"
+    assert classify(10, 2, {**quiet, "swarm": 20}, 60) == "occasional"
+    assert classify(5, 0, {**quiet, "repetition": 80}, 60) == "repetitive"
+    assert classify(40, 0, {**quiet, "no_pause": 90}, 60) == "automated"
+    assert classify(12, 12, {"schedule": 100, "no_pause": 0, "repetition": 95, "swarm": 100}, 60) == "automated"   # first match wins
+
+
+def test_longest_daily_quiet_hours():
+    assert longest_daily_quiet_hours(np.array([8, 9, 10, 20]) * 3600.0) == pytest.approx(12.0)        # 20:00 to 08:00
+    day = 86400.0
+    assert longest_daily_quiet_hours(np.array([0 * day + 23 * 3600, 1 * day + 1 * 3600, 2 * day + 12 * 3600])) == pytest.approx(11.0)
+    assert longest_daily_quiet_hours(np.arange(48) * 1800.0) == pytest.approx(0.5)
+
+
+def test_demo_account_types(demo_report):
+    acc = demo_report["accounts"]
+    by_id = {a["id"]: a for a in acc["accounts"]}
+    assert by_id["watersafe_alerts"]["type"] == "automated" and by_id["watersafe_alerts"]["pattern"] == "regular"
+    assert by_id["boost_agency"]["type"] == "automated" and by_id["boost_agency"]["pattern"] == "hourly"
+    # Automated but benign: the news feed never posts in a flagged group.
+    feed = by_id["harbour_daily_news"]
+    assert feed["type"] == "automated" and feed["signals"]["no_pause"] >= 50 and feed["flagged_posts"] == 0
+    assert acc["type_counts"]["single_purpose"] == 58          # 40 copy-paste accounts + 18 template accounts
+    assert acc["type_counts"]["automated"] == 7                # 3 bots, the news feed, 3 people with a morning ritual
+    assert sum(acc["type_counts"].values()) == acc["n_accounts"]
+    # Ordinary people sleep: no organic background account is typed as automated.
+    ev = acc["evaluation"]
+    assert ev["false_positives"] == 4 and ev["true_positives"] == 61 and ev["false_negatives"] == 16
+    json.dumps(demo_report)
+
+
+def test_demo_groups_say_how_many_accounts(demo_report):
+    flagged = [c for c in demo_report["clusters"] if c["verdict"] != "low"]
+    spread = sorted(c["accounts"] for c in flagged)
+    assert spread == [1, 2, 3, 18, 40]
+    one = next(c for c in flagged if c["accounts"] == 1)
+    assert "one account" in one["accounts_note"] and one["top_accounts"][0]["id"] == "watersafe_alerts"
+    assert all(len(c["times"]) == c["size"] and c["times"] == sorted(c["times"]) for c in flagged)
+    assert np.array(demo_report["activity"]["total"]).sum() == demo_report["dataset"]["posts"]
+    assert np.array(demo_report["activity"]["flagged"]).sum() == demo_report["summary"]["flagged_posts"]
+
+
+def test_without_account_column_accounts_are_not_typed():
+    report = analyse(load_dataset(DEMO))
+    assert report["accounts"] is None
+    assert all("accounts" not in c and "account" not in c["posts"][0] for c in report["clusters"])
+    assert any("No account column" in c for c in report["caveats"])
+
+
+def test_repetitive_and_unknown_accounts(tmp_path):
+    rows = ["account,content,time_posted"]
+    for k in range(6):       # one account repeating itself at unrelated times
+        rows.append(f'spammy,"Cheap watches for sale, visit my profile for the best deals today {k}",2026-11-0{k + 1} 1{k}:1{k}:00')
+    for k in range(40):      # ordinary accounts, and some rows with no account at all
+        who = "" if k % 4 == 0 else f"person{k % 7}"
+        rows.append(f'{who},"unrelated remark number {k} about topic {k * 7919 % 101} and nothing else",2026-11-0{1 + k % 9} 0{k % 10}:{10 + k}:00')
+    path = tmp_path / "a.csv"
+    path.write_text("\n".join(rows), encoding="utf-8")
+    report = analyse(load_dataset(path, account_col="account"))
+    acc = report["accounts"]
+    by_id = {a["id"]: a for a in acc["accounts"]}
+    assert by_id["spammy"]["type"] == "repetitive" and by_id["spammy"]["signals"]["repetition"] > 80
+    assert "" not in by_id and acc["posts_without_account"] == 10 and acc["n_accounts"] == 8   # spammy + person0..6
+
+
 # ---------------------------------------------------------------- dashboard API
 
 @pytest.fixture(scope="module")
@@ -256,6 +332,10 @@ def test_api_lists_and_describes_datasets(client):
     assert any(d["id"] == "server:demo_posts.csv" for d in listing)
     info = client.get("/api/datasets/info", params={"id": "server:demo_posts.csv"}).json()
     assert info["guess"]["text"] == "content" and info["guess"]["time"] == "time_posted" and len(info["preview"]) == 5
+    assert info["guess"]["account"] == "account"
+    res = client.post("/api/analyze", json={"dataset_id": "server:demo_posts.csv", "account_col": "account"})
+    assert res.status_code == 200 and res.json()["accounts"]["flagged_accounts"] == 65
+    assert res.json()["clusters"][0]["posts"][0]["account"]
 
 
 @pytest.mark.parametrize("bad", ["server:../requirements.txt", "server:make_demo_data.py", "upload:../../x.csv",

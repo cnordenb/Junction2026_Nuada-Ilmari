@@ -23,7 +23,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).absolute().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from detect_swarm import DEFAULT_MIN_SIZE, analyse  # noqa: E402
@@ -149,6 +149,7 @@ class AnalyzeRequest(BaseModel):
     text_col: str | None = None
     time_col: str | None = None
     label_col: str | None = None
+    account_col: str | None = None
     seeds: list[Seed] = Field(default_factory=list, max_length=50)
     threshold: float = Field(default=DEFAULT_THRESHOLD, ge=20, le=100)
     half_life: str = "10m"
@@ -156,34 +157,44 @@ class AnalyzeRequest(BaseModel):
     semantic: bool = False
 
 
-def _trim(post: dict) -> dict:
-    if len(post["content"]) > MAX_CELL:
-        post = {**post, "content": post["content"][:MAX_CELL] + "…"}
-    return post
+def _trim(holder: dict, key: str) -> None:
+    """Cut long post contents in holder[key] before they go to the browser."""
+    holder[key] = [{**p, "content": p["content"][:MAX_CELL] + "…"} if len(p["content"]) > MAX_CELL else p
+                   for p in holder[key]]
+
+
+def _trim_report(report: dict) -> None:
+    for cluster in report["clusters"]:
+        _trim(cluster, "posts")
+    if report["seeds"]:
+        _trim(report["seeds"], "matches")
+    for account in (report["accounts"] or {"accounts": []})["accounts"]:
+        _trim(account, "sample_posts")
+
+
+def _detect(req: AnalyzeRequest, path: Path) -> dict:
+    ds = load_dataset(path, req.text_col, req.time_col, label_col=req.label_col, max_rows=MAX_ROWS,
+                      account_col=req.account_col or None)
+    return analyse(ds, [s.model_dump() for s in req.seeds], threshold=req.threshold,
+                   half_life=parse_duration(req.half_life), min_size=req.min_size,
+                   semantic=req.semantic, sample=25)
 
 
 @app.post("/api/analyze")
 def analyze(req: AnalyzeRequest) -> dict:
     path, name = _resolve(req.dataset_id)
-    if req.semantic and not (ALLOW_SEMANTIC and semantic_available()):
+    if req.semantic and not config()["semantic_available"]:
         raise HTTPException(400, "Semantic mode is not installed on this server.")
     if not _busy.acquire(blocking=False):
         raise HTTPException(429, "The server is busy with other analyses. Try again in a minute.")
     started = time.time()
     try:
-        ds = load_dataset(path, req.text_col or None, req.time_col or None,
-                          label_col=req.label_col or None, max_rows=MAX_ROWS)
-        report = analyse(ds, [s.model_dump() for s in req.seeds], threshold=req.threshold,
-                         half_life=parse_duration(req.half_life), min_size=req.min_size,
-                         semantic=req.semantic, sample=25)
+        report = _detect(req, path)
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(400, str(exc)) from exc
     finally:
         _busy.release()
-    for cluster in report["clusters"]:
-        cluster["posts"] = [_trim(p) for p in cluster["posts"]]
-    if report["seeds"]:
-        report["seeds"]["matches"] = [_trim(p) for p in report["seeds"]["matches"]]
+    _trim_report(report)
     report["dataset"]["name"] = name
     report["elapsed_seconds"] = round(time.time() - started, 1)
     return report
