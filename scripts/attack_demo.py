@@ -70,8 +70,11 @@ def alias_farm(rng: random.Random):
         for pos in sorted(rng.sample(range(1, len(base) - 1), rng.randrange(1, 4)), reverse=True):
             local.insert(pos, ".")
         email = "".join(local) + (f"+trial{rng.randrange(1, 99)}" if rng.random() < 0.6 else "") + "@gmail.com"
-        yield ({"email": email, "business": f"{rng.choice(FIRST).title()} Studio", "device_id": device(),
-                "fill_ms": rng.randrange(4000, 9000)}, CHROME.format(v=rng.choice([140, 141, 142])), 1.5)
+        # Fills the form with a script: the page sees no mouse, touch or keys at all.
+        yield ({"email": email, "business": f"{rng.choice(FIRST).title()} Stables", "device_id": device(),
+                "fill_ms": rng.randrange(4000, 9000),
+                "behaviour": {"moves": 0, "touches": 0, "keys": 0, "rtt": round(rng.uniform(20, 60), 1)}},
+               CHROME.format(v=rng.choice([140, 141, 142])), 1.5)
 
 
 def stealth_farm(rng: random.Random):
@@ -79,8 +82,14 @@ def stealth_farm(rng: random.Random):
     for k in range(15):
         first, last = rng.choice(FIRST), rng.choice(LAST)
         digits = rng.randrange(1000, 9999)
-        yield ({"email": f"{first}{last}{digits}@outlook.com", "business": f"{first.title()} {last.title()} Hair",
-                "device_id": devices[k % 3], "fill_ms": rng.randrange(3000, 8000)}, STALE, 2.0)
+        # Antidetect automation: moves the mouse in straight lines at constant
+        # speed and types at perfectly even intervals, from a server near ours.
+        yield ({"email": f"{first}{last}{digits}@outlook.com", "business": f"{first.title()} {last.title()} Hooves",
+                "device_id": devices[k % 3], "fill_ms": rng.randrange(3000, 8000),
+                "behaviour": {"moves": rng.randrange(25, 40), "touches": 0, "keys": rng.randrange(18, 28),
+                              "straight": round(rng.uniform(0.97, 1.0), 3), "speed_cv": round(rng.uniform(0.02, 0.08), 3),
+                              "pauses": 0, "key_cv": round(rng.uniform(0.01, 0.05), 3), "rtt": round(rng.uniform(0.8, 3.0), 1)}},
+               STALE, 2.0)
 
 
 def humanlike(rng: random.Random):
@@ -89,7 +98,13 @@ def humanlike(rng: random.Random):
         email = rng.choice([f"{first}.{last}@gmail.com", f"{first}{rng.randrange(70, 99)}@icloud.com",
                             f"{first[0]}{last}@proton.me", f"{first}_{last}@yahoo.com"])
         yield ({"email": email, "business": f"{last.title()} {rng.choice(['Yoga', 'Nails', 'Barber', 'Massage'])}",
-                "device_id": device(), "fill_ms": rng.randrange(9000, 40000)}, rng.choice(OTHER_UAS), rng.uniform(8, 20))
+                "device_id": device(), "fill_ms": rng.randrange(9000, 40000),
+                # Replays recorded human input: wobbly paths, pauses, uneven typing.
+                "behaviour": {"moves": rng.randrange(60, 140), "touches": 0, "keys": rng.randrange(18, 32),
+                              "straight": round(rng.uniform(0.45, 0.75), 3), "speed_cv": round(rng.uniform(0.6, 1.2), 3),
+                              "pauses": rng.randrange(2, 7), "key_cv": round(rng.uniform(0.4, 0.9), 3),
+                              "rtt": round(rng.uniform(25, 90), 1)}},
+               rng.choice(OTHER_UAS), rng.uniform(8, 20))
 
 
 CAMPAIGNS = {"naive-bot": naive_bot, "alias-farm": alias_farm, "stealth-farm": stealth_farm, "humanlike": humanlike}

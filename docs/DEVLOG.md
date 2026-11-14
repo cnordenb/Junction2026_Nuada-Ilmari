@@ -126,3 +126,11 @@
 - Deployed and reset; unit tests not rerun.
 
 **20:13:58** Tom rolled back the previous session's changes (commit f218eb3: score-logic changes and the 2D "How Sargas decides" panel) because he did not want them; committed that rollback. Added only a typeset equation panel "The formula" to the dashboard (KaTeX from cdnjs): bot score = 100/(1+e^-z) and z with all 13 weighted terms, coloured by signup / group / lowers-the-score, built from the live model weights, plus a worked example with the newest scored signup's numbers. No graphs changed. Deployed; tests not rerun.
+
+**20:36:30** Behaviour factors (request from Tom: mouse and phone movement, latency pings, timezone, natural movement should lower the score, hashing).
+- The Neighbr page now sends a behaviour summary with each signup: pointer moves, touches, key presses, path straightness, speed variation, pauses, typing-rhythm variation, background-ping round-trip time and jitter, browser timezone. Counts and statistics only; the pointer path never leaves the page.
+- Four new factors (17 total): no mouse/touch/typing at all +1.5; robotic movement or typing +2.0 (straight constant-speed paths, perfectly even key intervals); natural movement and typing -1.5 (wobbly, paused movement, uneven typing); latency under 4 ms +0.5.
+- Console bots now carry behaviour: alias-farm none (script fill), stealth-farm robotic input from near our server, humanlike replays human-looking input (still a deliberate miss).
+- Decision: no country-based penalty (it would block real people for where they live). The defensible signal is a mismatch between browser timezone and IP location; it needs an IP-to-location database (a download, not done yet). Timezone is collected and stored for it.
+- Forged logs carry no behaviour data, so those results are unchanged (0 people blocked, 85.7% bots); the new factors are only exercised by live signups and the console.
+- Hashing: device ID is a SHA-256 hash; emails and IPs are stored in plain text on the VPS (not changed).

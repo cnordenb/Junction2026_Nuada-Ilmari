@@ -282,6 +282,11 @@ FACTORS = [
     ("no_device_check", "Device check missing", 1.0, "1 if the page's device check never ran"),
     ("datacenter", "Datacenter / VPN network", 0.8, "1 if the network is a cloud, hosting or VPN provider"),
     ("machine_name", "Machine-made name", 0.8, "(digits at the end of the email name - 1) / 4, capped at 1"),
+    # Behaviour on the signup page (live form only; absent from plain files).
+    ("no_human_input", "No mouse, touch or typing", 1.5, "1 if the page ran but saw no mouse movement, touch or key press"),
+    ("robotic_motion", "Robotic movement or typing", 2.0, "straight-line, constant-speed pointer paths, or perfectly even typing (0 to 1)"),
+    ("human_motion", "Natural movement and typing", -1.5, "wobbly, paused pointer or touch movement and irregular typing (0 to 1)"),
+    ("near_server", "Latency too low for a person", 0.5, "1 if the page's background ping took under 4 ms (a machine next to our server)"),
     ("swarm_size", "Size of linked group", 1.5, "(signups in the linked group - 4) / 10, capped at 1, times how well this signup matches the group"),
     ("shared_identity", "Matches the group's shared details", 2.0, "weighted share of the group's shared details this signup has (device, inbox, throwaway, automation count most; email pattern, IP, network less)"),
     ("timing", "Group timing beats chance", 2.5, "group synchrony score / 100 (burst, timer, same minute, same time of day), times how well this signup matches the group"),
@@ -295,9 +300,48 @@ EVIDENCE_WEIGHT = {"inbox": 1.0, "device": 1.0, "disposable": 1.0, "ua": 0.6, "e
                    "ip": 0.5, "net": 0.4, "asn": 0.4}
 
 
+GROUP_KEYS = {"swarm_size", "shared_identity", "timing", "organisation"}
+
+
 def model_description() -> dict:
     return {"bias": BIAS, "block": SCORE_BLOCK, "review": SCORE_REVIEW,
-            "factors": [{"key": k, "label": l, "weight": w, "measure": m} for k, l, w, m in FACTORS]}
+            "factors": [{"key": k, "label": l, "weight": w, "measure": m, "group": k in GROUP_KEYS}
+                        for k, l, w, m in FACTORS]}
+
+
+def behaviour_factors(raw: str) -> dict[str, tuple[float, str]]:
+    """Behaviour summary from the signup page -> {factor: (x, reason)}.
+    The page sends counts and statistics only, never the pointer path."""
+    try:
+        b = json.loads(raw) if raw else None
+    except ValueError:
+        b = None
+    if not isinstance(b, dict):
+        return {}
+    num = lambda k: float(b.get(k) or 0) if isinstance(b.get(k), (int, float)) else 0.0
+    moves, touches, keys = num("moves"), num("touches"), num("keys")
+    straight, speed_cv, pauses, key_cv = num("straight"), num("speed_cv"), num("pauses"), num("key_cv")
+    rtt = b.get("rtt") if isinstance(b.get("rtt"), (int, float)) else None
+    out: dict[str, tuple[float, str]] = {}
+    if moves + touches + keys == 0:
+        out["no_human_input"] = (1.0, "The page saw no mouse movement, touch or key press: the form was filled by a script.")
+    robotic_pointer = 0.0
+    if moves >= 10:
+        robotic_pointer = min(1, max(0, (straight - 0.85) / 0.15)) * min(1, max(0, (0.3 - speed_cv) / 0.3))
+    robotic_keys = min(1, max(0, (0.12 - key_cv) / 0.12)) if keys >= 6 else 0.0
+    robotic = max(robotic_pointer, robotic_keys)
+    if robotic > 0:
+        what = "pointer moved in straight lines at constant speed" if robotic_pointer >= robotic_keys else "keys were pressed at perfectly even intervals"
+        out["robotic_motion"] = (robotic, f"The {what}, unlike a hand.")
+    move_part = min(1, (moves + touches) / 40) * (1 if pauses >= 1 else 0.6) * (1 - robotic_pointer)
+    type_part = min(1, max(0, (key_cv - 0.2) / 0.4)) if keys >= 4 else 0.0
+    human = min(1.0, 0.6 * move_part + 0.4 * type_part)
+    if human > 0:
+        out["human_motion"] = (human, f"Natural input: {int(moves)} pointer moves, {int(touches)} touches, "
+                                      f"{int(pauses)} pauses, uneven typing rhythm.")
+    if rtt is not None and 0 <= rtt < 4:
+        out["near_server"] = (1.0, f"The background ping took {rtt:.1f} ms, faster than any phone or home connection.")
+    return out
 
 
 def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
@@ -353,6 +397,8 @@ def signup_factors(frame: pd.DataFrame) -> tuple[np.ndarray, list[dict]]:
         if digits and len(digits.group(1)) >= 2:
             d = len(digits.group(1))
             put("machine_name", (d - 1) / 4, f"The email name ends in {d} digits, common in generated accounts.")
+        for key, (val, reason) in behaviour_factors(str(row.get("behaviour", "") or "")).items():
+            put(key, val, reason)
     return x, why
 
 
@@ -639,7 +685,7 @@ def analyse(su: Signups, link: float = DEFAULT_LINK, min_size: int = DEFAULT_MIN
         report["score_parts"] = [
             sorted(({"key": k, "label": FACTORS[j][1], "x": round(float(fx[i, j]), 2), "weight": FACTORS[j][2],
                      "contribution": round(float(fx[i, j] * FACTORS[j][2]), 2), "reason": fwhy[i].get(k, ""),
-                     "kind": "group" if j >= 9 else "signup", "points": round(float(fx[i, j] * FACTORS[j][2]), 2)}
+                     "kind": "group" if k in GROUP_KEYS else "signup", "points": round(float(fx[i, j] * FACTORS[j][2]), 2)}
                     for j, k in enumerate(FACTOR_KEYS) if fx[i, j] > 0), key=lambda d: -abs(d["contribution"]))
             for i in range(n)]
         report["model"] = model_description()

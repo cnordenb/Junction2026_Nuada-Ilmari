@@ -216,6 +216,52 @@ drawDeck();
 // Signals Sargas uses: a device check, how long the form took, the browser's
 // automation flag, and a hidden field people never fill in.
 let firstTouch = null;
+
+// ---- Behaviour summary for Sargas. Only counts and statistics leave the page,
+// never the pointer path itself.
+const B = {pts: [], moves: 0, touches: 0, keys: 0, keyTimes: [], rtts: []};
+document.addEventListener("pointermove", (e) => {
+  if (e.pointerType !== "mouse") return;
+  B.moves++;
+  if (B.pts.length < 600) B.pts.push([performance.now(), e.clientX, e.clientY]);
+}, {passive: true});
+document.addEventListener("touchstart", () => { B.touches++; }, {passive: true});
+document.addEventListener("touchmove", () => { B.touches++; }, {passive: true});
+document.addEventListener("keydown", () => { B.keys++; if (B.keyTimes.length < 300) B.keyTimes.push(performance.now()); });
+const cv = (a) => { if (a.length < 2) return 0; const m = a.reduce((x, y) => x + y, 0) / a.length; if (!m) return 0;
+  return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) / m; };
+function behaviour() {
+  // Split the pointer trail into strokes at pauses over 300 ms.
+  let strokes = [[]], pauses = 0;
+  for (let i = 0; i < B.pts.length; i++) {
+    if (i && B.pts[i][0] - B.pts[i - 1][0] > 300) { pauses++; strokes.push([]); }
+    strokes[strokes.length - 1].push(B.pts[i]);
+  }
+  let path = 0, disp = 0; const speeds = [];
+  for (const st of strokes) {
+    if (st.length < 3) continue;
+    for (let i = 1; i < st.length; i++) {
+      const d = Math.hypot(st[i][1] - st[i - 1][1], st[i][2] - st[i - 1][2]), dt = st[i][0] - st[i - 1][0];
+      path += d; if (dt > 0) speeds.push(d / dt);
+    }
+    disp += Math.hypot(st[st.length - 1][1] - st[0][1], st[st.length - 1][2] - st[0][2]);
+  }
+  const gaps = B.keyTimes.slice(1).map((t, i) => t - B.keyTimes[i]).filter((g) => g < 2000);
+  const rtts = B.rtts.slice().sort((a, b) => a - b);
+  const r = (v, d = 3) => Math.round(v * 10 ** d) / 10 ** d;
+  return {moves: B.moves, touches: B.touches, keys: B.keys, straight: path > 0 ? r(Math.min(1, disp / path)) : 0,
+    speed_cv: r(cv(speeds)), pauses, key_cv: r(cv(gaps)),
+    rtt: rtts.length ? r(rtts[Math.floor(rtts.length / 2)], 1) : null, jitter: rtts.length ? r(rtts[rtts.length - 1] - rtts[0], 1) : null,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || null, tz_offset: -new Date().getTimezoneOffset()};
+}
+// Background pings: three tiny requests to measure round-trip time.
+(async () => {
+  for (let k = 0; k < 3; k++) {
+    const t0 = performance.now();
+    try { await fetch("/api/ping", {cache: "no-store"}); B.rtts.push(performance.now() - t0); } catch (e) {}
+    await new Promise((res) => setTimeout(res, 700));
+  }
+})();
 const form = document.getElementById("form");
 form.addEventListener("focusin", () => { if (firstTouch === null) firstTouch = performance.now(); });
 form.addEventListener("keydown", () => { if (firstTouch === null) firstTouch = performance.now(); });
@@ -290,13 +336,13 @@ form.addEventListener("submit", async (ev) => {
     const res = await fetch("/api/trial/signup", {method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({email: document.getElementById("email").value, business: document.getElementById("business").value,
         website: document.getElementById("website").value, device_id: await deviceId(),
-        fill_ms: firstTouch === null ? 0 : Math.round(performance.now() - firstTouch), webdriver: !!navigator.webdriver})});
+        fill_ms: firstTouch === null ? 0 : Math.round(performance.now() - firstTouch), webdriver: !!navigator.webdriver, behaviour: behaviour()})});
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Something went wrong. Neigh-ver mind, try again.");
     out.className = "result " + body.action; out.textContent = body.message;
     if (body.token) { mine = {id: body.id, token: body.token}; showCheck(body); pollMine(); }
     if (body.action === "allow") form.reset();
-    firstTouch = null;
+    firstTouch = null; B.pts = []; B.moves = 0; B.touches = 0; B.keys = 0; B.keyTimes = [];
   } catch (e) {
     out.className = "result error"; out.textContent = e.message;
   } finally { btn.disabled = false; btn.textContent = "Giddy up 🐴"; }

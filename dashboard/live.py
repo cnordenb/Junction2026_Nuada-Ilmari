@@ -48,7 +48,7 @@ SHOW_SCORE = os.environ.get("GUARD_SHOW_SCORE", "1") == "1"
 WINDOW_DAYS = 7
 MAX_LIVE_ROWS = 20000
 FIELDS = ["id", "created_at", "email", "username", "ip", "asn", "asn_org", "user_agent", "device_id",
-          "fill_ms", "honeypot", "webdriver"]
+          "fill_ms", "honeypot", "webdriver", "behaviour"]
 
 router = APIRouter()
 _lock = threading.RLock()
@@ -71,7 +71,8 @@ def _db() -> sqlite3.Connection:
         source TEXT, campaign TEXT, action_at_signup TEXT, action_now TEXT, reasons TEXT, risk INTEGER)""")
     have = {r[1] for r in con.execute("PRAGMA table_info(signups)")}
     for col, kind in (("score", "INTEGER"), ("score_at_signup", "INTEGER"), ("parts", "TEXT"),
-                      ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT")):
+                      ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT"),
+                      ("behaviour", "TEXT")):
         if col not in have:
             con.execute(f"ALTER TABLE signups ADD COLUMN {col} {kind}")
     con.execute("""CREATE TABLE IF NOT EXISTS bans (
@@ -90,7 +91,7 @@ def _history() -> pd.DataFrame:
     su = load_signups(demo, label_col="label")
     frame = su.frame[[lab == "organic" for lab in su.labels]].reset_index(drop=True)
     frame["time"] = frame["time"] + (_state["started"] - 120 - float(frame["time"].max()))
-    for col in ("fill_ms", "honeypot", "webdriver"):
+    for col in ("fill_ms", "honeypot", "webdriver", "behaviour"):
         frame[col] = ""
     return frame
 
@@ -116,8 +117,8 @@ def judge(row: dict, source: str, campaign: str = "") -> dict:
     ticket, token = _ticket(), secrets.token_hex(16)
     with _lock:
         _con.execute("INSERT INTO signups (id, created_at, email, username, ip, asn, asn_org, user_agent, device_id, "
-                     "fill_ms, honeypot, webdriver, source, campaign, ticket, token, history) "
-                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     "fill_ms, honeypot, webdriver, behaviour, source, campaign, ticket, token, history) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      [row[f] for f in FIELDS] + [source, campaign, ticket, token, "[]"])
         _rejudge()
         _update_bans()
@@ -180,7 +181,7 @@ def _simulated_customers() -> None:
             row = {"id": f"s-{secrets.token_hex(5)}", "created_at": time.time(), "email": person["email"],
                    "username": person["username"], "ip": person["ip"], "asn": str(person["asn"]),
                    "asn_org": person["asn_org"], "user_agent": person["user_agent"], "device_id": person["device_id"],
-                   "fill_ms": str(int(rng.uniform(6000, 45000))), "honeypot": "", "webdriver": ""}
+                   "fill_ms": str(int(rng.uniform(6000, 45000))), "honeypot": "", "webdriver": "", "behaviour": ""}
             judge(row, "simulated")
         except Exception as exc:  # never let the simulator kill the server
             print(f"simulated customer failed: {exc}")
@@ -196,6 +197,21 @@ def start_background() -> None:
 
 # ---------------------------------------------------------------- API
 
+class Behaviour(BaseModel):
+    """Summary of how the form was filled, measured in the browser."""
+    moves: float | None = Field(default=None, ge=0, le=1e6)
+    touches: float | None = Field(default=None, ge=0, le=1e6)
+    keys: float | None = Field(default=None, ge=0, le=1e6)
+    straight: float | None = Field(default=None, ge=0, le=1)
+    speed_cv: float | None = Field(default=None, ge=0, le=100)
+    pauses: float | None = Field(default=None, ge=0, le=1e5)
+    key_cv: float | None = Field(default=None, ge=0, le=100)
+    rtt: float | None = Field(default=None, ge=0, le=60000)
+    jitter: float | None = Field(default=None, ge=0, le=60000)
+    tz: str | None = Field(default=None, max_length=64)
+    tz_offset: float | None = Field(default=None, ge=-900, le=900)
+
+
 class TrialSignup(BaseModel):
     email: str = Field(min_length=3, max_length=200)
     business: str = Field(default="", max_length=100)
@@ -203,6 +219,24 @@ class TrialSignup(BaseModel):
     fill_ms: int | None = Field(default=None, ge=0, le=36_000_000)
     website: str = Field(default="", max_length=200)      # honeypot: hidden from people
     webdriver: bool = False
+    behaviour: "Behaviour | None" = None
+
+
+BEHAVIOUR_NUMBERS = ("moves", "touches", "keys", "straight", "speed_cv", "pauses", "key_cv", "rtt", "jitter", "tz_offset")
+
+
+def _clean_behaviour(b: "Behaviour | None") -> str:
+    """Keep only bounded numbers and a short timezone name; never a raw path."""
+    if b is None:
+        return ""
+    out = {}
+    for k in BEHAVIOUR_NUMBERS:
+        v = getattr(b, k)
+        if v is not None:
+            out[k] = round(float(v), 4)
+    if b.tz:
+        out["tz"] = b.tz[:64]
+    return json.dumps(out)
 
 
 def _client_ip(request: Request) -> str:
@@ -253,7 +287,8 @@ def trial_signup(item: TrialSignup, request: Request) -> dict:
            "username": item.business.strip(), "ip": ip, "asn": "", "asn_org": "",
            "user_agent": request.headers.get("user-agent", "")[:300], "device_id": item.device_id.strip(),
            "fill_ms": "" if item.fill_ms is None else str(item.fill_ms),
-           "honeypot": "1" if item.website.strip() else "", "webdriver": "1" if item.webdriver else ""}
+           "honeypot": "1" if item.website.strip() else "", "webdriver": "1" if item.webdriver else "",
+           "behaviour": _clean_behaviour(item.behaviour)}
     with _lock:
         if _con.execute("SELECT COUNT(*) FROM signups").fetchone()[0] >= MAX_LIVE_ROWS:
             _con.execute("DELETE FROM signups WHERE id IN (SELECT id FROM signups ORDER BY created_at LIMIT 1000)")
@@ -586,3 +621,9 @@ def ban_reset(item: BanReset) -> dict:
         _update_bans()
         _con.commit()
     return {"ok": True, "signups_deleted": deleted}
+
+
+@router.get("/api/ping")
+def ping() -> dict:
+    """Tiny endpoint the signup page calls in the background to measure latency."""
+    return {"t": time.time()}

@@ -280,7 +280,7 @@ function render(s) {
   renderBans(s.bans || [], s.ban_after);
   if (s.model && !$("ftable").dataset.done) {
     $("bias").textContent = String(s.model.bias).replace("-", "−");
-    $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${i >= 9 ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");
+    $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${f.group ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");
     $("ftable").dataset.done = "1";
   }
 }
