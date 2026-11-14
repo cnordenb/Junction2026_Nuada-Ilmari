@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sargas Live</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -38,15 +37,6 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 @media (min-width: 1100px) { .tiles { grid-template-columns: 1fr 1fr 2.3fr 1.3fr; } .tiles .formula { grid-column: auto; } }
 @media (max-width: 760px) { .tiles .formula { grid-column: auto; } .formula .cols { grid-template-columns: 1fr; } }
 .formula .eq { font: 600 16px var(--mono); margin-bottom: 8px; }
-.mathpanel { perspective: 1400px; }
-.mathcard { background: linear-gradient(160deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px 14px;
-  transform: rotateX(4deg); transform-origin: 50% 100%; box-shadow: 0 22px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06); }
-.mathcard .katex { font-size: 1.32em; color: var(--fg); }
-.mathcard .katex-display { margin: .3em 0; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
-.mathnote { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--fg2); margin-top: 6px; }
-.mathnote i { font-style: normal; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-#mathExample .katex { font-size: 1.12em; }
-@media (prefers-reduced-motion: reduce) { .mathcard { transform: none; } }
 .ftable { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; font-size: 13px; color: var(--fg2); }
 .ftable div { display: flex; justify-content: space-between; gap: 8px; }
 .ftable b { font-family: var(--mono); color: var(--fg); }
@@ -137,14 +127,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         <div class="meta" style="margin-top:6px">Sign up from your own phone. Then try to farm accounts.</div></div></div>
   </div>
 
-  <div class="panel mathpanel"><h2>The formula</h2>
-    <div class="mathcard"><div id="mathMain"><p class="empty">Loading the formula…</p></div>
-      <div id="mathExample"></div>
-      <div class="mathnote"><span><i style="background:#7aa2f7"></i>about this signup</span><span><i style="background:#f2b84b"></i>about its linked group</span>
-        <span><i style="background:#4fd08a"></i>lowers the score</span><span>every x is measured from 0 to 1</span>
-        <span><span class="a">under 35 allow</span> · <span class="r">35–59 review</span> · <span class="b">60+ block</span></span>
-        <span>weights set by hand; a ranking score, not a probability</span></div></div></div>
-
   <div class="panel" id="chart">
     <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px"><h2>Signups, last 20 minutes (30-second bins)</h2>
       <div class="legend"><span style="--c: var(--block)">blocked</span><span style="--c: var(--review)">review</span><span style="--c: var(--allow)">allowed</span></div></div>
@@ -171,7 +153,6 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     Timing tests compare each group against two weeks of past signups (a simulated baseline that is never shown as users).</p>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
@@ -254,44 +235,6 @@ function renderBans(bans, after) {
     } catch (e) { btn.textContent = e.message; }
   });
 }
-const SHORT = {throwaway: "throwaway", same_inbox: "same\\ inbox", automation: "automation", hidden_field: "hidden\\ field",
-  fast_fill: "fast\\ fill", device_reuse: "device\\ reuse", no_device_check: "no\\ device\\ check", datacenter: "datacenter",
-  machine_name: "machine\\ name", swarm_size: "group\\ size", shared_identity: "group\\ match", timing: "group\\ timing",
-  organisation: "organisation"};
-const MCOL = {s: "#7aa2f7", g: "#f2b84b", n: "#4fd08a"};
-let mathDrawn = false, mathExampleId = null;
-function term(f, i, val) {
-  const col = f.weight < 0 ? MCOL.n : i >= 9 ? MCOL.g : MCOL.s;
-  const w = Math.abs(f.weight).toFixed(1), sign = f.weight < 0 ? "-" : "+";
-  const x = val === undefined ? `x_{\\text{${SHORT[f.key] || f.key}}}` : `(${val.toFixed(2)})`;
-  return `${sign}\\,{\\color{${col}}${w}\\,${x}}`;
-}
-function renderMath(model, feed) {
-  if (!model || !window.katex) return;
-  if (!mathDrawn) {
-    const F = model.factors, b = String(model.bias);
-    const line = (from, to) => F.slice(from, to).map((f, k) => term(f, from + k)).join("\\;");
-    const tex = `\\begin{aligned}
-      \\text{bot score} &= \\frac{100}{1 + e^{-z}} \\\\[6pt]
-      z &= ${b} \\;${line(0, 5)} \\\\
-        &\\phantom{= ${b}}\\;${line(5, 9)} \\\\
-        &\\phantom{= ${b}}\\;${line(9, 13)}
-    \\end{aligned}`;
-    katex.render(tex, $("mathMain"), {displayMode: true, throwOnError: false, trust: false});
-    mathDrawn = true;
-  }
-  // Worked example: the newest signup that has at least one factor above zero.
-  const r = (feed || []).find((x) => (x.parts || []).length);
-  if (!r || r.id + ":" + r.score === mathExampleId) { if (!r) $("mathExample").innerHTML = ""; return; }
-  mathExampleId = r.id + ":" + r.score;
-  const on = {}; r.parts.forEach((p) => on[p.key] = p);
-  const used = model.factors.map((f, i) => [f, i]).filter(([f]) => on[f.key]);
-  const z = model.bias + used.reduce((a, [f]) => a + f.weight * on[f.key].x, 0);
-  const sc = 100 / (1 + Math.exp(-z));
-  const tex = `\\text{ticket ${String(r.ticket || "").replace(/[^A-Z0-9]/g, "")}:}\\quad z = ${model.bias}\\;${used.map(([f, i]) => term(f, i, on[f.key].x)).join("\\;")} = ${z.toFixed(2)}
-    \\;\\Rightarrow\\; \\frac{100}{1 + e^{-(${z.toFixed(2)})}} = ${sc.toFixed(0)}`;
-  katex.render(tex, $("mathExample"), {displayMode: true, throwOnError: false, trust: false});
-}
 let testedDrawn = false;
 function renderTested(t) {
   if (!t || testedDrawn) return;
@@ -334,7 +277,6 @@ function render(s) {
   s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
   drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
   renderTested(s.tested);
-  renderMath(s.model, s.feed);
   renderBans(s.bans || [], s.ban_after);
   if (s.model && !$("ftable").dataset.done) {
     $("bias").textContent = String(s.model.bias).replace("-", "−");
