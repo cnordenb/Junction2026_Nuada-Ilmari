@@ -556,8 +556,7 @@ class BanToggle(BaseModel):
 
 @router.post("/api/guard/ban")
 def ban_toggle(item: BanToggle, request: Request) -> dict:
-    """Switch one ban on or off. Needs the demo key."""
-    _check_key(request)
+    """Switch one ban on or off (open to anyone on the dashboard, by request)."""
     with _lock:
         cur = _con.execute("UPDATE bans SET enabled = ? WHERE id = ?", (1 if item.enabled else 0, item.id))
         _con.commit()
