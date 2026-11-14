@@ -29,7 +29,7 @@ from scipy import sparse
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from swarm_common import load_dataset, normalise
+from swarm_common import Dataset, clip, load_dataset, normalise, pair_dataset_parser, run_cli
 
 DEFAULT_THRESHOLD = 60.0     # pairs at or above this count as "similar"
 DEFAULT_MIN_CHARS = 20       # shorter posts ("lol", "thanks!") are never clustered
@@ -296,83 +296,81 @@ def score_dataset(texts: list[str], threshold: float = DEFAULT_THRESHOLD, semant
 
 # ---------------------------------------------------------------- CLI
 
-def _clip(text: str, width: int = 100) -> str:
-    text = " ".join(str(text).split())
-    return text if len(text) <= width else text[: width - 1] + "…"
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Similarity score for posts: 100 = identical, 0 = completely different.")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    pair = sub.add_parser("pair", help="score two texts")
-    pair.add_argument("a")
-    pair.add_argument("b")
+def _parser() -> argparse.ArgumentParser:
+    parser, pair, data = pair_dataset_parser(
+        "Similarity score for posts: 100 = identical, 0 = completely different.",
+        ("a", "b"), "score two texts", "score every post in a dataset against the others")
     pair.add_argument("--corpus", help="dataset file used for word statistics (optional)")
     pair.add_argument("--text-col")
-
-    data = sub.add_parser("dataset", help="score every post in a dataset against the others")
-    data.add_argument("path")
     data.add_argument("--text-col", help="content column (guessed if omitted)")
     data.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     data.add_argument("--top", type=int, default=20, help="how many top pairs to show")
-    data.add_argument("--max-rows", type=int)
-    data.add_argument("--out", help="write per-post scores to this CSV file")
-    data.add_argument("--json", action="store_true", help="print JSON instead of text")
-
     for p in (pair, data):
         p.add_argument("--semantic", action="store_true", help="also use sentence embeddings (catches rewording)")
         p.add_argument("--model", default=DEFAULT_MODEL)
-    args = parser.parse_args(argv)
+    return parser
 
-    if args.command == "pair":
-        corpus = load_dataset(args.corpus, args.text_col, require_time=False).texts if args.corpus else None
-        print(f"{pair_similarity(args.a, args.b, corpus, args.semantic, args.model):.1f}")
-        return 0
 
-    ds = load_dataset(args.path, args.text_col, require_time=False, max_rows=args.max_rows)
-    result = score_dataset(ds.texts, args.threshold, args.semantic, args.model, args.top)
+def _pair_command(args: argparse.Namespace) -> None:
+    corpus = load_dataset(args.corpus, args.text_col, require_time=False).texts if args.corpus else None
+    print(f"{pair_similarity(args.a, args.b, corpus, args.semantic, args.model):.1f}")
+
+
+def _write_scores(path: str, ds: Dataset, per: dict) -> None:
+    import pandas as pd
+    pd.DataFrame({
+        "id": ds.ids,
+        "max_similarity": per["max_similarity"],
+        "nearest_id": [ds.ids[k] if k >= 0 else "" for k in per["nearest"]],
+        "n_similar": per["n_similar"],
+        "exact_copies": per["exact_copies"],
+    }).to_csv(path, index=False)
+
+
+def _json_report(ds: Dataset, result: dict, threshold: float) -> str:
+    return json.dumps({
+        "posts": len(ds), "unique_texts": result["unique_texts"], "threshold": threshold,
+        "pairs_at_or_above_threshold": result["n_pairs"],
+        "posts_with_a_similar_post": int((result["per_post"]["max_similarity"] >= threshold).sum()),
+        "top_pairs": [{"score": p["score"], "id_a": ds.ids[p["a"]], "id_b": ds.ids[p["b"]],
+                       "text_a": ds.texts[p["a"]], "text_b": ds.texts[p["b"]]} for p in result["pairs"]],
+        "warnings": ds.warnings,
+    }, ensure_ascii=False, indent=2)
+
+
+def _print_report(ds: Dataset, result: dict, threshold: float) -> None:
     per = result["per_post"]
-    if args.out:
-        import pandas as pd
-        pd.DataFrame({
-            "id": ds.ids,
-            "max_similarity": per["max_similarity"],
-            "nearest_id": [ds.ids[k] if k >= 0 else "" for k in per["nearest"]],
-            "n_similar": per["n_similar"],
-            "exact_copies": per["exact_copies"],
-        }).to_csv(args.out, index=False)
-    if args.json:
-        print(json.dumps({
-            "posts": len(ds), "unique_texts": result["unique_texts"], "threshold": args.threshold,
-            "pairs_at_or_above_threshold": result["n_pairs"],
-            "posts_with_a_similar_post": int((per["max_similarity"] >= args.threshold).sum()),
-            "top_pairs": [{"score": p["score"], "id_a": ds.ids[p["a"]], "id_b": ds.ids[p["b"]],
-                           "text_a": ds.texts[p["a"]], "text_b": ds.texts[p["b"]]} for p in result["pairs"]],
-            "warnings": ds.warnings,
-        }, ensure_ascii=False, indent=2))
-        return 0
-
     for w in ds.warnings:
         print(f"note: {w}")
-    flagged = int((per["max_similarity"] >= args.threshold).sum())
+    flagged = int((per["max_similarity"] >= threshold).sum())
     print(f"{len(ds):,} posts, {result['unique_texts']:,} distinct texts (column {ds.text_col!r}).")
     print(f"{flagged:,} posts ({flagged / len(ds):.1%}) have at least one other post scoring "
-          f"{args.threshold:g} or higher; {int((per['exact_copies'] > 0).sum()):,} have an exact copy.")
+          f"{threshold:g} or higher; {int((per['exact_copies'] > 0).sum()):,} have an exact copy.")
     if result["pairs"]:
-        print(f"\nMost similar pairs of distinct texts (of {result['n_pairs']:,} at or above {args.threshold:g}):")
-        for p in result["pairs"]:
-            print(f"  {p['score']:5.1f}  [{ds.ids[p['a']]}] {_clip(ds.texts[p['a']], 70)}")
-            print(f"         [{ds.ids[p['b']]}] {_clip(ds.texts[p['b']], 70)}")
+        print(f"\nMost similar pairs of distinct texts (of {result['n_pairs']:,} at or above {threshold:g}):")
+    for p in result["pairs"]:
+        print(f"  {p['score']:5.1f}  [{ds.ids[p['a']]}] {clip(ds.texts[p['a']], 70)}")
+        print(f"         [{ds.ids[p['b']]}] {clip(ds.texts[p['b']], 70)}")
+
+
+def _dataset_command(args: argparse.Namespace) -> None:
+    ds = load_dataset(args.path, args.text_col, require_time=False, max_rows=args.max_rows)
+    result = score_dataset(ds.texts, args.threshold, args.semantic, args.model, args.top)
+    if args.out:
+        _write_scores(args.out, ds, result["per_post"])
+    if args.json:
+        print(_json_report(ds, result, args.threshold))
+        return
+    _print_report(ds, result, args.threshold)
     if args.out:
         print(f"\nPer-post scores written to {args.out}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    {"pair": _pair_command, "dataset": _dataset_command}[args.command](args)
     return 0
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    try:
-        sys.exit(main())
-    except (ValueError, RuntimeError, OSError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    sys.exit(run_cli(main))

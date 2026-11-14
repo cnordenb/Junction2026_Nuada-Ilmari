@@ -35,7 +35,8 @@ import sys
 import numpy as np
 from scipy.stats import poisson
 
-from swarm_common import format_duration, load_dataset, parse_duration, parse_time, to_iso
+from swarm_common import (Dataset, format_duration, load_dataset, pair_dataset_parser, parse_duration,
+                          parse_time, run_cli, to_iso)
 
 DEFAULT_HALF_LIFE = 600.0
 PERIODS = {"hourly": 3600.0, "daily": 86400.0}
@@ -227,103 +228,108 @@ PATTERN_TEXT = {
     "daily": "posts land on the same time of day",
     None: "no timing pattern beyond chance",
 }
+BASELINE_TEXT = {
+    "dataset": "  More synchronised than {beats_random:.1f}% of random groups of the same size from this dataset.",
+    "own span": "  Nothing to compare bursts with, so burst is as measured; the pattern scores are "
+                "compared with evenly scattered times.",
+}
 
 
 def _round(d: dict) -> dict:
     return {k: round(v, 1) if isinstance(v, float) else v for k, v in d.items()}
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Temporal synchrony score: 100 = same instant, 0 = far apart with no pattern.")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    pair = sub.add_parser("pair", help="score two timestamps")
-    pair.add_argument("t1")
-    pair.add_argument("t2")
-
-    data = sub.add_parser("dataset", help="score the timing of a dataset, or of selected posts within it")
-    data.add_argument("path")
+def _parser() -> argparse.ArgumentParser:
+    parser, pair, data = pair_dataset_parser(
+        "Temporal synchrony score: 100 = same instant, 0 = far apart with no pattern.",
+        ("t1", "t2"), "score two timestamps", "score the timing of a dataset, or of selected posts within it")
     data.add_argument("--time-col", help="time column (guessed if omitted)")
     data.add_argument("--text-col")
     data.add_argument("--ids", help="comma-separated post ids: score this group against the rest of the dataset")
-    data.add_argument("--max-rows", type=int)
-    data.add_argument("--out", help="write per-post scores to this CSV file")
-    data.add_argument("--json", action="store_true", help="print JSON instead of text")
-
     for p in (pair, data):
         p.add_argument("--half-life", default="10m", help="time gap at which two posts score 50 (default 10m)")
-    args = parser.parse_args(argv)
-    half_life = parse_duration(args.half_life)
+    return parser
 
-    if args.command == "pair":
-        print(f"{pair_sync(parse_time(args.t1), parse_time(args.t2), half_life):.1f}")
-        return 0
 
-    ds = load_dataset(args.path, args.text_col, args.time_col, max_rows=args.max_rows)
-    scorer = SyncScorer(ds.times, half_life)
-    if args.ids:
-        wanted = {s.strip() for s in args.ids.split(",") if s.strip()}
-        chosen = np.array([i for i, post_id in enumerate(ds.ids) if post_id in wanted], dtype=np.int64)
-        missing = wanted - {ds.ids[i] for i in chosen}
-        if missing:
-            raise ValueError(f"Ids not found in the dataset: {', '.join(sorted(missing)[:10])}")
-        group = scorer.score(ds.times[chosen])
-        what = f"{len(chosen)} selected posts"
+def _selected(ds: Dataset, ids: str) -> np.ndarray:
+    """Positions of the posts whose ids are listed, comma-separated."""
+    wanted = {s.strip() for s in ids.split(",") if s.strip()}
+    chosen = np.array([i for i, post_id in enumerate(ds.ids) if post_id in wanted], dtype=np.int64)
+    missing = wanted - {ds.ids[i] for i in chosen}
+    if missing:
+        raise ValueError(f"Ids not found in the dataset: {', '.join(sorted(missing)[:10])}")
+    return chosen
+
+
+def _json_report(ds: Dataset, half_life: float, group: dict, bursts: list[dict]) -> str:
+    parts = ("raw", "baseline", "adjusted")
+    return json.dumps({
+        "posts": len(ds), "half_life_seconds": half_life,
+        "first_time": to_iso(ds.times.min()), "last_time": to_iso(ds.times.max()),
+        "group": {**_round({k: v for k, v in group.items() if k not in parts}),
+                  **{k: _round(group[k]) for k in parts}},
+        "bursts": [{**b, "start": to_iso(b["start"]), "end": to_iso(b["end"])} for b in bursts[:20]],
+        "warnings": ds.warnings,
+    }, indent=2)
+
+
+def _print_group(group: dict, selected: int | None, n_posts: int) -> None:
+    if selected is not None:
+        print(f"\nSynchrony of {selected} selected posts: {group['sync']:.1f} / 100 - {PATTERN_TEXT[group['pattern']]}.")
     else:
-        group = scorer.score(ds.times)
-        what = f"all {len(ds):,} posts"
-    per_post = nearest_sync(ds.times, half_life)
+        print(f"\nBackground timing of all {n_posts:,} posts. This is the dataset's normal level, not a sign of "
+              f"coordination; a busy timeline scores high on burst. Use --ids to score a group against it.")
+    if group["baseline_source"] in BASELINE_TEXT:
+        print(BASELINE_TEXT[group["baseline_source"]].format(**group))
+    print("  component   measured   chance level   score")
+    for k in COMPONENTS:
+        print(f"  {k:<10} {group['raw'][k]:9.1f} {group['baseline'][k]:14.1f} {group['adjusted'][k]:7.1f}")
+
+
+def _print_bursts(bursts: list[dict]) -> None:
+    if not bursts:
+        print("\nNo unusually busy windows found.")
+        return
+    print(f"\nUnusually busy windows ({len(bursts)} found, strongest first):")
+    for b in bursts[:10]:
+        print(f"  {to_iso(b['start'])} to {to_iso(b['end'])}: {b['posts']} posts, about {b['expected']:g} expected")
+
+
+def _write_scores(path: str, ds: Dataset, half_life: float) -> None:
+    import pandas as pd
+    pd.DataFrame({"id": ds.ids, "time": [to_iso(t) for t in ds.times],
+                  "sync_with_nearest_post": nearest_sync(ds.times, half_life).round(1)}).to_csv(path, index=False)
+
+
+def _dataset_command(args: argparse.Namespace, half_life: float) -> None:
+    ds = load_dataset(args.path, args.text_col, args.time_col, max_rows=args.max_rows)
+    chosen = _selected(ds, args.ids) if args.ids else None
+    group = SyncScorer(ds.times, half_life).score(ds.times if chosen is None else ds.times[chosen])
     bursts = find_bursts(ds.times, half_life)
-
     if args.out:
-        import pandas as pd
-        pd.DataFrame({"id": ds.ids, "time": [to_iso(t) for t in ds.times],
-                      "sync_with_nearest_post": per_post.round(1)}).to_csv(args.out, index=False)
+        _write_scores(args.out, ds, half_life)
     if args.json:
-        print(json.dumps({
-            "posts": len(ds), "half_life_seconds": half_life,
-            "first_time": to_iso(ds.times.min()), "last_time": to_iso(ds.times.max()),
-            "group": {**{k: (round(v, 1) if isinstance(v, float) else v) for k, v in group.items()
-                         if k not in ("raw", "baseline", "adjusted")},
-                      "raw": _round(group["raw"]), "baseline": _round(group["baseline"]),
-                      "adjusted": _round(group["adjusted"])},
-            "bursts": [{**b, "start": to_iso(b["start"]), "end": to_iso(b["end"])} for b in bursts[:20]],
-            "warnings": ds.warnings,
-        }, indent=2))
-        return 0
-
+        print(_json_report(ds, half_life, group, bursts))
+        return
     for w in ds.warnings:
         print(f"note: {w}")
     print(f"{len(ds):,} posts from {to_iso(ds.times.min())} to {to_iso(ds.times.max())} "
           f"(column {ds.time_col!r}), half-life {format_duration(half_life)}.")
-    if args.ids:
-        print(f"\nSynchrony of {what}: {group['sync']:.1f} / 100 - {PATTERN_TEXT[group['pattern']]}.")
-    else:
-        print(f"\nBackground timing of {what}. This is the dataset's normal level, not a sign of "
-              f"coordination; a busy timeline scores high on burst. Use --ids to score a group against it.")
-    if group["baseline_source"] == "dataset":
-        print(f"  More synchronised than {group['beats_random']:.1f}% of random groups of the same size from this dataset.")
-    elif group["baseline_source"] == "own span":
-        print("  Nothing to compare bursts with, so burst is as measured; the pattern scores are "
-              "compared with evenly scattered times.")
-    print("  component   measured   chance level   score")
-    for k in COMPONENTS:
-        print(f"  {k:<10} {group['raw'][k]:9.1f} {group['baseline'][k]:14.1f} {group['adjusted'][k]:7.1f}")
-    if bursts:
-        print(f"\nUnusually busy windows ({len(bursts)} found, strongest first):")
-        for b in bursts[:10]:
-            print(f"  {to_iso(b['start'])} to {to_iso(b['end'])}: {b['posts']} posts, about {b['expected']:g} expected")
-    else:
-        print("\nNo unusually busy windows found.")
+    _print_group(group, None if chosen is None else len(chosen), len(ds))
+    _print_bursts(bursts)
     if args.out:
         print(f"\nPer-post scores written to {args.out}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    half_life = parse_duration(args.half_life)
+    if args.command == "pair":
+        print(f"{pair_sync(parse_time(args.t1), parse_time(args.t2), half_life):.1f}")
+    else:
+        _dataset_command(args, half_life)
     return 0
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    try:
-        sys.exit(main())
-    except (ValueError, RuntimeError, OSError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        sys.exit(1)
+    sys.exit(run_cli(main))
