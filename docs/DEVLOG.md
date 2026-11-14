@@ -85,3 +85,11 @@
 - Live demo: every signup gets a 4-character ticket and a private token. The trial page shows "your live bot score", with reasons, a gauge and a history line, polling every 2 s (`/api/trial/status`). The dashboard lists people by ticket with live scores and points per reason, a live score histogram by source, and the forged-log test results.
 - Decision: `GUARD_SHOW_SCORE=1` (default) shows people their own score and reasons for the demo. A real site would turn it off, because it teaches attackers what is checked.
 - Tests: 61 passing.
+
+**18:19:02** Deployed to the Hostinger VPS (179.67.199.198, Ubuntu 26.04, Docker 29 already installed) with `deploy/docker-compose.yml` from `/opt/botswarm`.
+- Access with a dedicated SSH key (Tom installed it with ssh-copy-id); no password used by the agent. The root password was shared in chat and should be changed.
+- The demo key lives in `deploy/.env` on the server and locally (git-ignored).
+- Domain botswarm.site shows Active in hPanel but the .site registry has no delegation yet (WHOIS: available; Let's Encrypt: NXDOMAIN). Caddy was paused to avoid Let's Encrypt failure limits.
+- Decision: serve on `179-67-199-198.sslip.io` meanwhile (wildcard DNS to the server's IP), with real Let's Encrypt certificates. Live now: https://trial.179-67-199-198.sslip.io and https://guard.179-67-199-198.sslip.io. A watcher on Tom's Mac switches Caddy to botswarm.site once all three names resolve.
+- Tested from outside over the internet: attack from this Mac, 27 of 27 attack signups blocked (4 caught after signup), 11 of 11 simulated customers allowed; dashboard updated live. Also tested inside the container: 37 of 37. Live data reset afterwards.
+- Question: why has botswarm.site not reached the registry? Ask the Hostinger booth if it is still missing.

@@ -25,6 +25,13 @@ Every signup gets a **bot score from 0 to 100** with the points and reason behin
 - **On the dashboard:** every person by ticket with their live score, the points per reason, and "score at signup → now" when a farm is caught later. Also a live histogram of scores by source, and the results on the forged logs.
 - **Tested on forged bot activity logs** (`scripts/eval_signups.py`, 10 logs with an answer key): AUC 0.92; 0 of 16,864 people score 70 or more; 85.7% of bots do (73.7% on hard logs).
 
+## Where it runs now
+
+- Trial site: **https://trial.179-67-199-198.sslip.io** (and https://trial.botswarm.site once the domain resolves)
+- Dashboard: **https://guard.179-67-199-198.sslip.io** (later https://guard.botswarm.site)
+- Server: Hostinger VPS 179.67.199.198, project in `/opt/botswarm`, settings in `deploy/.env` (not in git).
+- Update after a code change: `rsync` the repo to `/opt/botswarm`, then `docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build`.
+
 ## Deploy (Hostinger VPS)
 
 1. DNS: point `A` records for `<domain>`, `trial.<domain>` and `guard.<domain>` at the VPS IP.
