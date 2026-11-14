@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Swarm detector</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --wash: rgba(11,11,11,.04);
+  --series-1: #2a78d6; --series-2: #eb6834; --track: #cde2fb;
+  --critical: #d03b3b; --warning: #fab219; --neutral: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.05);
+    --series-1: #3987e5; --series-2: #d95926; --track: #0d366b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 4px; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0 0 8px; }
+.lede, .hint { color: var(--ink2); }
+.hint { font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-top: 16px; }
+.step { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 600; margin-right: 8px; vertical-align: 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-top: 10px; }
+label { display: block; font-size: 13px; color: var(--ink2); margin-bottom: 3px; }
+select, input[type=number], input[type=datetime-local], textarea {
+  font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--axis); border-radius: 6px; padding: 6px 8px; }
+textarea { width: 100%; min-height: 70px; resize: vertical; }
+select { min-width: 180px; max-width: 100%; }
+button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); padding: 6px 12px; }
+button:hover { background: var(--wash); }
+button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; padding: 9px 20px; }
+button.primary:disabled { opacity: .45; cursor: not-allowed; }
+button.small { font-size: 12px; padding: 2px 8px; white-space: nowrap; }
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th { text-align: left; color: var(--ink2); font-weight: 600; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.time { white-space: nowrap; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.seed { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--grid); }
+.seed .text { flex: 1; overflow-wrap: anywhere; }
+.msg { border-radius: 8px; padding: 10px 14px; margin-top: 16px; border: 1px solid var(--border); background: var(--surface); }
+.msg.error { border-left: 4px solid var(--critical); }
+.msg.note { border-left: 4px solid var(--warning); }
+.msg ul { margin: 4px 0 0; padding-left: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .label { font-size: 13px; color: var(--ink2); }
+.tile .value { font-size: 28px; font-weight: 600; line-height: 1.2; }
+.tile .sub { font-size: 12px; color: var(--muted); }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--ink2); margin: 6px 0; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+#chart { position: relative; }
+#chart svg { display: block; width: 100%; }
+#chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 12px; padding: 6px 9px;
+  border-radius: 6px; white-space: nowrap; transform: translate(-50%, -100%); display: none; z-index: 2; }
+.cluster { margin-top: 12px; }
+.cluster header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.badge .dot { width: 9px; height: 9px; border-radius: 50%; }
+.badge.strong .dot { background: var(--critical); }
+.badge.moderate .dot { background: var(--warning); }
+.badge.low .dot { background: var(--neutral); }
+.score { font-size: 13px; color: var(--ink2); }
+.score b { font-size: 20px; color: var(--ink); }
+.meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 24px; margin: 10px 0; }
+.meter .cap { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink2); }
+.meter .cap b { color: var(--ink); }
+.meter .track { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.meter .fill { height: 100%; border-radius: 4px; background: var(--series-1); }
+.posts td:last-child { overflow-wrap: anywhere; }
+details { margin-top: 8px; }
+summary { cursor: pointer; color: var(--ink2); font-size: 13px; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--axis); border-top-color: var(--ink); border-radius: 50%;
+  animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Swarm detector</h1>
+  <p class="lede">Finds groups of posts or comments that are both <b>similar in text</b> and <b>synchronised in time</b>:
+    the footprint of brigading, astroturfing and bot networks. It flags patterns for a person to review; it does not identify who is behind them.</p>
+
+  <section class="card" aria-labelledby="h-data">
+    <h2 id="h-data"><span class="step">1</span>Choose a dataset</h2>
+    <p class="hint">A CSV, TSV, JSON or JSON Lines file with one post per row. It needs a content column and a time-posted column.</p>
+    <div class="row">
+      <div><label for="dataset">Dataset on the server</label><select id="dataset"><option value="">Loading…</option></select></div>
+      <div><label for="file">Or upload your own</label><input type="file" id="file" accept=".csv,.tsv,.json,.jsonl,.ndjson"></div>
+    </div>
+    <div id="columns" hidden>
+      <div class="row">
+        <div><label for="text-col">Content column</label><select id="text-col"></select></div>
+        <div><label for="time-col">Time-posted column</label><select id="time-col"></select></div>
+        <div class="hint" id="rows-note"></div>
+      </div>
+      <details><summary>Preview first rows</summary><div class="scroll"><table id="preview"></table></div></details>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-seeds">
+    <h2 id="h-seeds"><span class="step">2</span>Add sample posts <span class="hint">(optional)</span></h2>
+    <p class="hint">Paste posts you already find suspicious. The tool looks for posts like them in the dataset and checks whether they were posted in sync.
+      Leave this empty to scan the whole dataset for swarms.</p>
+    <label for="seed-text">Post text</label>
+    <textarea id="seed-text" placeholder="Paste one post or comment here"></textarea>
+    <div class="row">
+      <div><label for="seed-time">Time posted, UTC (optional)</label><input type="datetime-local" id="seed-time" step="1"></div>
+      <button id="seed-add" type="button">Add sample post</button>
+    </div>
+    <div id="seed-list"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-run">
+    <h2 id="h-run"><span class="step">3</span>Run the detection</h2>
+    <div class="row" style="align-items:flex-start">
+      <div>
+        <label for="threshold">Text similarity needed: <b id="threshold-val">60</b> / 100</label>
+        <input type="range" id="threshold" min="40" max="95" step="5" value="60">
+        <div class="hint">Lower finds looser matches and more false alarms.</div>
+      </div>
+      <div>
+        <label for="half-life">Time window</label>
+        <select id="half-life">
+          <option value="1m">1 minute</option><option value="5m">5 minutes</option><option value="10m" selected>10 minutes</option>
+          <option value="30m">30 minutes</option><option value="1h">1 hour</option><option value="6h">6 hours</option><option value="1d">1 day</option>
+        </select>
+        <div class="hint">Two posts this far apart score 50 for synchrony.</div>
+      </div>
+      <div>
+        <label for="min-size">Smallest group to report</label>
+        <input type="number" id="min-size" min="2" max="1000" value="5" style="width:90px">
+        <div class="hint">posts</div>
+      </div>
+    </div>
+    <details>
+      <summary>More options</summary>
+      <div class="row">
+        <div><label><input type="checkbox" id="semantic" disabled> Also compare meaning, to catch lightly reworded copies (much slower)</label>
+          <div class="hint" id="semantic-note">Not installed on this server.</div></div>
+        <div><label for="label-col">Answer-key column, to measure accuracy</label><select id="label-col"><option value="">None</option></select>
+          <div class="hint">For labelled test data only. Shows precision and false-positive rate.</div></div>
+      </div>
+    </details>
+    <div class="row"><button id="run" class="primary" type="button" disabled>Find swarms</button><span id="status" class="hint" role="status"></span></div>
+  </section>
+
+  <div id="error" class="msg error" role="alert" hidden></div>
+  <section id="results" hidden></section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const state = { info: null, seeds: [], config: null, report: null };
+
+/** Build an element. Text always goes in as text, never as HTML: post content is untrusted. */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    node.append(child.nodeType ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+const fmt = (n) => Number(n).toLocaleString("en-US");
+const pct = (v) => v == null ? "n/a" : (v * 100).toFixed(1) + "%";
+const when = (iso) => iso ? iso.replace("T", " ").replace("Z", "") : "";
+
+function duration(seconds) {
+  if (seconds < 1) return "under 1 s";
+  for (const [unit, size] of [["d", 86400], ["h", 3600], ["min", 60]]) {
+    if (seconds >= size) { const a = seconds / size; return (a >= 10 ? a.toFixed(0) : a.toFixed(1).replace(".0", "")) + " " + unit; }
+  }
+  return seconds.toFixed(0) + " s";
+}
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const body = await res.json(); detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail); } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+function showError(message) { const box = $("error"); box.hidden = !message; box.textContent = message || ""; if (message) box.scrollIntoView({ block: "nearest" }); }
+
+// ---------------------------------------------------------------- step 1: dataset
+function fillSelect(select, options, chosen, emptyLabel) {
+  select.replaceChildren();
+  if (emptyLabel) select.append(el("option", { value: "" }, emptyLabel));
+  for (const name of options) select.append(el("option", { value: name, selected: name === chosen }, name));
+}
+
+function useDataset(info) {
+  state.info = info;
+  fillSelect($("text-col"), info.columns, info.guess.text, info.guess.text ? null : "Choose…");
+  fillSelect($("time-col"), info.columns, info.guess.time, info.guess.time ? null : "Choose…");
+  fillSelect($("label-col"), info.columns, null, "None");
+  const capped = info.rows > info.max_rows;
+  $("rows-note").textContent = `${fmt(info.rows)} rows in ${info.name}.` +
+    (capped ? ` Only the first ${fmt(info.max_rows)} will be analysed.` : "");
+  const cols = info.columns.slice(0, 8);
+  $("preview").replaceChildren(
+    el("thead", {}, el("tr", {}, cols.map((c) => el("th", {}, c)))),
+    el("tbody", {}, info.preview.map((row) => el("tr", {}, cols.map((c) => el("td", {}, row[c]))))));
+  $("columns").hidden = false;
+  updateRun();
+}
+function updateRun() { $("run").disabled = !(state.info && $("text-col").value && $("time-col").value); }
+
+async function chooseServerDataset(id) {
+  showError("");
+  if (!id) return;
+  try { useDataset(await api("/api/datasets/info?id=" + encodeURIComponent(id))); }
+  catch (err) { showError(err.message); }
+}
+
+$("dataset").addEventListener("change", (e) => { $("file").value = ""; chooseServerDataset(e.target.value); });
+$("file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  showError("");
+  if (state.config && file.size > state.config.max_upload_mb * 1024 * 1024) {
+    showError(`That file is larger than ${state.config.max_upload_mb} MB.`); e.target.value = ""; return;
+  }
+  $("status").textContent = "Uploading…";
+  try {
+    useDataset(await api("/api/datasets?name=" + encodeURIComponent(file.name), { method: "POST", body: file }));
+    $("dataset").value = "";
+  } catch (err) { showError(err.message); e.target.value = ""; }
+  $("status").textContent = "";
+});
+$("text-col").addEventListener("change", updateRun);
+$("time-col").addEventListener("change", updateRun);
+
+// ---------------------------------------------------------------- step 2: sample posts
+function addSeed(content, time) {
+  content = content.trim();
+  if (!content || state.seeds.some((s) => s.content === content)) return;
+  state.seeds.push({ content, time: time || null });
+  renderSeeds();
+}
+function renderSeeds() {
+  $("seed-list").replaceChildren(...state.seeds.map((seed, k) =>
+    el("div", { class: "seed" },
+      el("b", {}, `${k + 1}.`),
+      el("div", { class: "text" }, seed.content, seed.time ? el("div", { class: "hint" }, "Posted " + when(seed.time)) : null),
+      el("button", { class: "small", type: "button", "aria-label": `Remove sample post ${k + 1}`,
+        onclick: () => { state.seeds.splice(k, 1); renderSeeds(); } }, "Remove"))));
+}
+$("seed-add").addEventListener("click", () => {
+  addSeed($("seed-text").value, $("seed-time").value);
+  $("seed-text").value = ""; $("seed-time").value = ""; $("seed-text").focus();
+});
+
+// ---------------------------------------------------------------- step 3: run
+$("threshold").addEventListener("input", (e) => { $("threshold-val").textContent = e.target.value; });
+
+async function run() {
+  showError("");
+  if ($("seed-text").value.trim()) addSeed($("seed-text").value, $("seed-time").value), $("seed-text").value = "";
+  $("run").disabled = true;
+  $("status").replaceChildren(el("span", { class: "spinner" }), "Comparing posts… large datasets can take a minute.");
+  try {
+    state.report = await api("/api/analyze", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataset_id: state.info.id, text_col: $("text-col").value, time_col: $("time-col").value,
+        label_col: $("label-col").value || null, seeds: state.seeds,
+        threshold: Number($("threshold").value), half_life: $("half-life").value,
+        min_size: Number($("min-size").value), semantic: $("semantic").checked,
+      }),
+    });
+    renderResults(state.report);
+    $("status").textContent = `Done in ${state.report.elapsed_seconds} s.`;
+  } catch (err) { showError(err.message); $("status").textContent = ""; }
+  updateRun();
+}
+$("run").addEventListener("click", run);
+
+// ---------------------------------------------------------------- results
+const VERDICT = { strong: "Strong signal", moderate: "Moderate signal", low: "Not flagged" };
+const PATTERN = { burst: "Bunched together in time", regular: "Constant intervals", hourly: "Same minute of the hour", daily: "Same time of day" };
+const COMPONENT = { burst: "Bunched together", regular: "Constant intervals", hourly: "Same minute of the hour", daily: "Same time of day" };
+
+function tile(label, value, sub) {
+  return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: "value" }, value), sub ? el("div", { class: "sub" }, sub) : null);
+}
+function meter(label, value, note) {
+  return el("div", { class: "meter" },
+    el("div", { class: "cap" }, el("span", {}, label, note ? ` · ${note}` : ""), el("b", {}, Math.round(value))),
+    el("div", { class: "track", role: "img", "aria-label": `${label}: ${Math.round(value)} out of 100` },
+      el("div", { class: "fill", style: `width:${Math.max(0, Math.min(100, value))}%` })));
+}
+function badge(verdict) { return el("span", { class: "badge " + verdict }, el("span", { class: "dot" }), VERDICT[verdict]); }
+
+function postsTable(posts, extra = []) {
+  return el("div", { class: "scroll" }, el("table", { class: "posts" },
+    el("thead", {}, el("tr", {}, extra.map((x) => el("th", { class: "num" }, x.head)), el("th", {}, "Time (UTC)"), el("th", {}, "ID"), el("th", {}, "Content"), el("th", {}))),
+    el("tbody", {}, posts.map((p) => el("tr", {},
+      extra.map((x) => el("td", { class: "num" }, x.cell(p))),
+      el("td", { class: "time" }, when(p.time)), el("td", { class: "time" }, p.id), el("td", {}, p.content),
+      el("td", {}, el("button", { class: "small", type: "button", title: "Add this post to the sample posts in step 2",
+        onclick: (e) => { addSeed(p.content, p.time); e.target.textContent = "Added"; e.target.disabled = true; } }, "Use as sample")))))));
+}
+
+function syncDetail(item) {
+  const d = item.sync_detail;
+  const source = { dataset: "random groups of the same size from this dataset", "own span": "evenly scattered times (too little data for a dataset comparison)", none: "nothing (too few posts)" }[d.compared_with];
+  return el("details", {}, el("summary", {}, "How the synchrony score was worked out"),
+    el("p", { class: "hint" }, `Each timing measurement is compared with ${source}. "Chance level" is the value only 1 in 1,000 such groups reach; the score is how far the measurement rises above it. The synchrony score is the highest of the four.`),
+    el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "Timing pattern"), el("th", { class: "num" }, "Measured"), el("th", { class: "num" }, "Chance level"), el("th", { class: "num" }, "Score"))),
+      el("tbody", {}, Object.keys(COMPONENT).map((k) => el("tr", {}, el("td", {}, COMPONENT[k]),
+        el("td", { class: "num" }, d.measured[k].toFixed(1)), el("td", { class: "num" }, d.chance_level[k].toFixed(1)), el("td", { class: "num" }, d.score[k].toFixed(1))))))));
+}
+
+function clusterCard(c) {
+  const more = c.posts.length > 3;
+  return el("article", { class: "card cluster" },
+    el("header", {}, badge(c.verdict), el("h3", {}, `Group ${c.id}: ${fmt(c.size)} posts`),
+      el("span", { class: "score" }, "Swarm score ", el("b", {}, Math.round(c.swarm_score)), " / 100")),
+    el("div", { class: "meters" },
+      meter("Text similarity", c.similarity, c.distinct_texts === 1 ? "all identical" : `${fmt(c.distinct_texts)} distinct texts`),
+      meter("Time synchrony", c.synchrony, c.pattern ? PATTERN[c.pattern] : "no pattern beyond chance")),
+    el("p", {}, c.reason),
+    el("p", { class: "hint" }, `${when(c.first_time)} to ${when(c.last_time)} UTC (${duration(c.span_seconds)})`),
+    postsTable(c.posts.slice(0, 3)),
+    more ? el("details", {}, el("summary", {}, `Show ${c.posts.length - 3} more posts` + (c.size > c.posts.length ? ` (of ${fmt(c.size)} in the group)` : "")), postsTable(c.posts.slice(3))) : null,
+    syncDetail(c),
+    el("div", { class: "row" }, el("button", { class: "small", type: "button",
+      onclick: (e) => navigator.clipboard.writeText(c.post_ids.join("\n")).then(() => { e.target.textContent = "Copied"; }) }, `Copy all ${fmt(c.size)} post IDs`)));
+}
+
+function renderResults(r) {
+  const root = $("results");
+  const d = r.dataset, s = r.summary;
+  const flagged = r.clusters.filter((c) => c.verdict !== "low");
+  const low = r.clusters.filter((c) => c.verdict === "low");
+  const parts = [el("h2", { style: "margin-top:28px" }, "Results for " + d.name)];
+
+  if (r.warnings.length) parts.push(el("div", { class: "msg note" }, el("b", {}, "Notes"), el("ul", {}, r.warnings.map((w) => el("li", {}, w)))));
+
+  parts.push(el("div", { class: "tiles" },
+    tile("Posts analysed", fmt(d.posts), `${when(d.first_time).slice(0, 10)} to ${when(d.last_time).slice(0, 10)}`),
+    tile("Flagged groups", fmt(s.flagged_clusters), `${s.strong_clusters} strong, ${s.moderate_clusters} moderate`),
+    tile("Posts in flagged groups", fmt(s.flagged_posts), `${pct(s.flagged_posts / d.posts)} of all posts`),
+    tile("Similar text, ordinary timing", fmt(s.similar_only_clusters), `${fmt(s.similar_only_posts)} posts, not flagged`)));
+
+  if (r.evaluation) {
+    const ev = r.evaluation;
+    parts.push(el("section", { class: "card" }, el("h2", {}, "Accuracy against the answer key"),
+      el("p", { class: "hint" }, `Measured on the column "${$("label-col").value}". A post counts as correctly flagged when it sits in a flagged group and the answer key marks it as part of a swarm.`),
+      el("div", { class: "tiles", style: "margin-top:8px" },
+        tile("Precision", pct(ev.precision), `${fmt(ev.true_positives)} of ${fmt(ev.true_positives + ev.false_positives)} flagged posts were real`),
+        tile("Recall", pct(ev.recall), `${fmt(ev.false_negatives)} swarm posts missed`),
+        tile("False-positive rate", pct(ev.false_positive_rate), `${fmt(ev.false_positives)} innocent posts flagged`)),
+      el("details", {}, el("summary", {}, "Breakdown by label"), el("table", {},
+        el("thead", {}, el("tr", {}, el("th", {}, "Label"), el("th", { class: "num" }, "Posts"), el("th", { class: "num" }, "Flagged"))),
+        el("tbody", {}, Object.entries(ev.by_label).map(([label, row]) => el("tr", {}, el("td", {}, label), el("td", { class: "num" }, fmt(row.posts)), el("td", { class: "num" }, fmt(row.flagged)))))))));
+  }
+
+  const chartCard = el("section", { class: "card" }, el("h2", {}, "Posts over time"),
+    el("div", { class: "legend" },
+      el("span", {}, el("span", { class: "swatch", style: "background:var(--series-2)" }), "In flagged groups"),
+      el("span", {}, el("span", { class: "swatch", style: "background:var(--series-1)" }), "All other posts")),
+    el("div", { id: "chart" }),
+    el("details", {}, el("summary", {}, "Show as table"), el("div", { class: "scroll" }, el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "From (UTC)"), el("th", {}, "To"), el("th", { class: "num" }, "Posts"), el("th", { class: "num" }, "In flagged groups"))),
+      el("tbody", {}, r.timeline.bins.map((b) => el("tr", {}, el("td", { class: "time" }, when(b.start)), el("td", { class: "time" }, when(b.end)),
+        el("td", { class: "num" }, fmt(b.total)), el("td", { class: "num" }, fmt(b.flagged)))))))));
+  parts.push(chartCard);
+
+  if (r.seeds) {
+    const sd = r.seeds;
+    const extra = [{ head: "Similarity", cell: (p) => p.similarity.toFixed(0) }, { head: "Sample", cell: (p) => "#" + p.seed }];
+    if (sd.matches.some((m) => m.sync_with_seed != null)) extra.push({ head: "Sync with sample", cell: (p) => p.sync_with_seed == null ? "" : p.sync_with_seed.toFixed(0) });
+    parts.push(el("section", { class: "card" },
+      el("header", { class: "cluster" }, el("h2", {}, `Posts like your ${sd.seeds.length} sample post${sd.seeds.length > 1 ? "s" : ""}: ${fmt(sd.n_matches)} found`)),
+      sd.n_matches >= 2 ? el("div", {}, el("p", { style: "margin-top:8px" }, badge(sd.verdict), " ", el("span", { class: "score" }, "Swarm score ", el("b", {}, Math.round(sd.swarm_score)), " / 100")),
+        el("div", { class: "meters" }, meter("Text similarity to the samples", sd.similarity), meter("Time synchrony", sd.synchrony, sd.pattern ? PATTERN[sd.pattern] : "no pattern beyond chance"))) : null,
+      el("p", {}, sd.reason),
+      el("p", { class: "hint" }, sd.seeds.map((x) => `Sample #${x.n}: ${fmt(x.matches)} matches`).join(" · ")),
+      sd.matches.length ? postsTable(sd.matches.slice(0, 10), extra) : null,
+      sd.matches.length > 10 ? el("details", {}, el("summary", {}, `Show ${sd.matches.length - 10} more matches` + (sd.n_matches > sd.matches.length ? ` (of ${fmt(sd.n_matches)})` : "")), postsTable(sd.matches.slice(10), extra)) : null,
+      sd.n_matches >= 2 ? syncDetail(sd) : null));
+  }
+
+  parts.push(el("h2", { style: "margin-top:28px" }, flagged.length ? `Flagged groups (${flagged.length})` : "No group was flagged"));
+  if (!flagged.length) parts.push(el("p", { class: "hint" }, "No group of posts in this dataset is both similar enough in text and synchronised enough in time. Try a lower similarity threshold or a longer time window if you expected one."));
+  parts.push(...flagged.map(clusterCard));
+
+  if (low.length) {
+    parts.push(el("details", { style: "margin-top:20px" },
+      el("summary", {}, `Similar text but ordinary timing: ${low.length} groups that were not flagged` + (r.clusters_omitted ? ` (${r.clusters_omitted} more not shown)` : "")),
+      el("p", { class: "hint" }, "Shown so you can check what was let through. These repeat text without posting in sync, which is typical of quotes, memes and common phrases."),
+      low.slice(0, 40).map(clusterCard)));
+  }
+
+  parts.push(el("div", { class: "msg note" }, el("b", {}, "Read this before drawing conclusions"), el("ul", {}, r.caveats.map((c) => el("li", {}, c)))));
+  root.replaceChildren(...parts);
+  root.hidden = false;
+  drawChart(r.timeline);
+  root.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ---------------------------------------------------------------- timeline chart
+function niceTicks(max) {
+  if (max <= 4) return Array.from({ length: max + 1 }, (_, k) => k);
+  const raw = max / 4, pow = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 5, 10].map((m) => m * pow).find((v) => v >= raw);
+  const ticks = [];
+  for (let v = 0; v <= max; v += step) ticks.push(v);
+  return ticks;
+}
+function drawChart(timeline) {
+  const host = $("chart");
+  if (!host) return;
+  const NS = "http://www.w3.org/2000/svg";
+  const svgEl = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+  const bins = timeline.bins;
+  const W = Math.max(320, host.clientWidth), H = 220, m = { top: 10, right: 8, bottom: 24, left: 40 };
+  const plotW = W - m.left - m.right, plotH = H - m.top - m.bottom;
+  const max = Math.max(1, ...bins.map((b) => b.total));
+  const ticks = niceTicks(max), top = Math.max(max, ticks[ticks.length - 1]);
+  const y = (v) => m.top + plotH - (v / top) * plotH;
+  const slot = plotW / bins.length, bar = Math.max(2, Math.min(24, slot - 2));
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img",
+    "aria-label": "Column chart of posts over time, with posts in flagged groups highlighted. The same data is in the table below." });
+
+  for (const t of ticks) {
+    svg.append(svgEl("line", { x1: m.left, x2: W - m.right, y1: y(t), y2: y(t), stroke: t === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }));
+    const label = svgEl("text", { x: m.left - 6, y: y(t) + 4, "text-anchor": "end" });
+    label.textContent = t >= 10000 ? (t / 1000) + "K" : fmt(t);
+    svg.append(label);
+  }
+  const nLabels = Math.min(5, bins.length), sameDay = bins[0].start.slice(0, 10) === bins[bins.length - 1].start.slice(0, 10);
+  for (let k = 0; k < nLabels; k++) {
+    const i = Math.round(k * (bins.length - 1) / (nLabels - 1 || 1));
+    const label = svgEl("text", { x: m.left + (i + 0.5) * slot, y: H - 6, "text-anchor": k === 0 ? "start" : k === nLabels - 1 ? "end" : "middle" });
+    label.textContent = sameDay ? bins[i].start.slice(11, 16) : bins[i].start.slice(5, 10) + " " + bins[i].start.slice(11, 16);
+    svg.append(label);
+  }
+  // Rounded top (data end), square at the baseline.
+  const column = (x, yTop, yBottom, fill, round) => {
+    const h = yBottom - yTop;
+    if (h <= 0) return;
+    const r = round ? Math.min(4, bar / 2, h) : 0;
+    svg.append(svgEl("path", { fill, d: `M${x},${yBottom} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + bar - r} Q${x + bar},${yTop} ${x + bar},${yTop + r} V${yBottom} Z` }));
+  };
+  const tip = el("div", { class: "tip" });
+  bins.forEach((b, i) => {
+    const x = m.left + i * slot + (slot - bar) / 2, base = y(0);
+    const other = b.total - b.flagged;
+    const flaggedTop = b.flagged ? Math.min(y(b.flagged), base - 2) : base;       // keep tiny counts visible
+    column(x, flaggedTop, base, "var(--series-2)", other === 0);
+    if (other) column(x, Math.min(y(b.total), flaggedTop - 3), flaggedTop - (b.flagged ? 2 : 0), "var(--series-1)", true);
+    const hit = svgEl("rect", { x: m.left + i * slot, y: m.top, width: slot, height: plotH, fill: "transparent" });
+    hit.addEventListener("mouseenter", () => {
+      tip.replaceChildren(el("b", {}, `${when(b.start).slice(0, 16)} to ${when(b.end).slice(11, 16)}`), el("br"),
+        `${fmt(b.total)} posts`, b.flagged ? `, ${fmt(b.flagged)} in flagged groups` : "");
+      tip.style.display = "block";
+      tip.style.left = Math.min(Math.max((x + bar / 2) / W * host.clientWidth, 90), host.clientWidth - 90) + "px";
+      tip.style.top = (y(b.total) - 6) + "px";
+    });
+    hit.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+    svg.append(hit);
+  });
+  host.replaceChildren(svg, tip);
+}
+let resizeTimer;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => state.report && drawChart(state.report.timeline), 150); });
+
+// ---------------------------------------------------------------- start
+(async function init() {
+  try {
+    state.config = await api("/api/config");
+    $("threshold").value = state.config.defaults.threshold; $("threshold-val").textContent = state.config.defaults.threshold;
+    $("min-size").value = state.config.defaults.min_size;
+    if (state.config.semantic_available) { $("semantic").disabled = false; $("semantic-note").textContent = "Uses a small language model. Expect about a minute per 5,000 posts."; }
+    const list = await api("/api/datasets");
+    const select = $("dataset");
+    select.replaceChildren(el("option", { value: "" }, list.length ? "Choose…" : "None available"),
+      ...list.map((d) => el("option", { value: d.id }, `${d.name} (${(d.bytes / 1024).toFixed(0)} KB)`)));
+    // Link straight to a result: ?dataset=demo_posts.csv&run=1
+    const params = new URLSearchParams(location.search);
+    const wanted = params.get("dataset") && list.find((d) => d.name === params.get("dataset"));
+    if (wanted) {
+      select.value = wanted.id;
+      await chooseServerDataset(wanted.id);
+      if (params.get("labels") && state.info.columns.includes(params.get("labels"))) $("label-col").value = params.get("labels");
+      for (const text of params.getAll("sample")) addSeed(text);
+      if (params.get("run") && !$("run").disabled) await run();
+    }
+  } catch (err) { showError("Could not reach the server: " + err.message); }
+})();
+</script>
+</body>
+</html>
