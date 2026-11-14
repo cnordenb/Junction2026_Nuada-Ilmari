@@ -266,6 +266,17 @@ const form = document.getElementById("form");
 form.addEventListener("focusin", () => { if (firstTouch === null) firstTouch = performance.now(); });
 form.addEventListener("keydown", () => { if (firstTouch === null) firstTouch = performance.now(); });
 
+// A random ID kept in this browser, so two identical phones (same model, OS,
+// language, timezone) are still two devices. The same phone signing up again
+// keeps its ID, so device reuse is still caught. Private windows get a new one.
+function browserId() {
+  try {
+    let v = localStorage.getItem("neighbrDevice");
+    if (!v) { v = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join(""); localStorage.setItem("neighbrDevice", v); }
+    return v;
+  } catch (e) { return ""; }
+}
+
 async function deviceId() {
   const c = document.createElement("canvas");
   let canvasSig = "";
@@ -276,7 +287,7 @@ async function deviceId() {
   } catch (e) {}
   const parts = [navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
     screen.colorDepth, devicePixelRatio, Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency,
-    navigator.platform, navigator.maxTouchPoints, canvasSig];
+    navigator.platform, navigator.maxTouchPoints, canvasSig, browserId()];
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("|")));
   return Array.from(new Uint8Array(buf).slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
 }

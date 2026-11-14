@@ -156,3 +156,9 @@
 - LFM3-VL-2B Q4_K_M (`scripts/lfm_judge.py`, service `lfm`): native thinking took 15-20 s and gave every case P = 0.95; switched thinking off, used a 5-step verdict label instead of a probability, three worked examples, JSON schema (reason, verdict, kind). Looked perfect on 4 hand cases (3 s each) but on the benchmark: AUC 0.55, 40% of bots, 10 of 60 people flagged; it called the account farms "shared_device" (copying the family example). Blend with the algorithm is worse than the algorithm alone.
 - Algorithm alone on the same set: AUC 0.90, 82% of bots, 0 people flagged.
 - Decision: neither model changes the score. The algorithm stays the judge. Lesson worth telling judges: hand-picked test cases flattered the LLM; the labelled benchmark did not.
+
+**22:47:07** Finishing pass before submission.
+- Identical-phone fix: the Neighbr device hash now includes a random ID kept in the browser (localStorage), so two same-model phones are two devices; the same phone signing up again is still recognised.
+- AI where it measured better, now built: a background worker asks d1 for a second opinion over all the evidence on each signup (redone when the score moves 10+) and LFM3-VL-2B for a plain-language summary of each swarm (under 40 words, exact numbers). Dashboard: "Review queue: algorithm + AI ranking" (score blended with d1; never changes a verdict), "AI n% bot" on each person, "AI summary (LFM3)" on each swarm. Verified live: farm accounts 73-91% bot, a real phone signup 27%; first summary accurate except it said one device (it was three), so the prompt now asks for exact numbers.
+- README rewritten for Sargas, Neighbr and botswarm.tech (what it does, the equation, AI-vs-algorithm table, accuracy, live URLs). Demo runbook rewritten. Submission draft in docs/SUBMISSION.md.
+- Tests: 68 passed, 1 skipped (live-model test).

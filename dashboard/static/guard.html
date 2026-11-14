@@ -51,6 +51,9 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 .tog:disabled { cursor: default; opacity: .85; }
 tr.off td { color: var(--muted); text-decoration: line-through; }
 tr.off td:last-child { text-decoration: none; }
+.aisum { margin-top: 6px; font-size: 13px; color: var(--fg2); border-left: 3px solid var(--accent); padding-left: 8px; }
+.aisum b { color: var(--accent); }
+.aip { font: 600 11px var(--mono); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 2px 6px; border-radius: 4px; }
 .b { color: var(--block); } .r { color: var(--review); } .a { color: var(--allow); }
 .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
@@ -143,7 +146,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   </div>
 
   <div class="grid">
-    <div class="panel"><h2>Swarms detected right now</h2><div id="groups"><p class="empty">No groups of linked signups yet.</p></div>
+    <div class="panel"><h2>Review queue: algorithm + AI ranking</h2>
+      <div id="queue"><p class="empty">Nothing needs a human look right now.</p></div>
+      <p class="meta" style="margin-top:6px">Ranked by the algorithm's score blended with d1's second opinion (better ranking on the labelled set: AUC 0.90 → 0.94). The AI orders the queue; it never changes a verdict.</p>
+      <h2 style="margin-top:18px">Swarms detected right now</h2><div id="groups"><p class="empty">No groups of linked signups yet.</p></div>
       <h2 style="margin-top:18px">Banned IPs (refused at the door)</h2>
       <div id="bans" style="margin-top:8px"><p class="empty">No banned IPs yet.</p></div>
       <h2 style="margin-top:18px">Attack campaigns (answer key from the attack script)</h2><div id="campaigns"><p class="empty">No attack yet.</p></div></div>
@@ -259,7 +265,7 @@ function render(s) {
   drawBars(s.timeline);
   $("groups").innerHTML = s.groups.length ? s.groups.map((g) => `<div class="group"><header><span class="chip ${esc(g.action)}">${esc(g.action)}</span>
       <b>${g.size} linked signups</b><span class="meta">${g.attack} from the attack script</span></header>
-      <ul>${g.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}<li>${esc(g.timing)}</li></ul><div class="why">${g.why.map(esc).join(" ")}</div></div>`).join("")
+      <ul>${g.evidence.map((e) => `<li>${esc(e)}</li>`).join("")}<li>${esc(g.timing)}</li></ul><div class="why">${g.why.map(esc).join(" ")}</div>${g.ai_summary ? `<div class="aisum"><b>AI summary (LFM3):</b> ${esc(g.ai_summary)}</div>` : ""}</div>`).join("")
     : `<p class="empty">No groups of linked signups yet.</p>`;
   const camps = Object.entries(s.campaigns);
   $("campaigns").innerHTML = camps.length ? `<table><tr><th>Campaign</th><th class="num">Sent</th><th class="num">Blocked</th><th class="num">Review</th><th class="num">Got in</th></tr>
@@ -272,7 +278,7 @@ function render(s) {
     const chg = r.score_at_signup !== null && r.score_at_signup !== r.score ? `<span class="chg">${r.score_at_signup} at signup → ${r.score} now</span>` : "";
     return `<div class="person${isNew ? " new" : changed ? " changed" : ""}">
       <div><div class="tk">${esc(r.ticket || "")}</div><div class="t meta">${clock(r.time)}</div></div>
-      <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}</div>
+      <div><div class="who">${esc(r.email)}</div><span class="src ${esc(r.source)}">${esc(r.source === "attack" ? (r.campaign || "attack") : r.source)}</span> <span class="chip ${esc(r.action)}">${esc(r.action)}</span> ${chg}${r.ai_p != null ? ` <span class="aip" title="d1's second opinion over all the evidence; ranks the review queue, never changes the score">AI ${Math.round(r.ai_p * 100)}% bot</span>` : ""}</div>
       <div class="sc"><div class="num" style="color:${col}">${r.score ?? "–"}</div><div class="bar"><i style="width:${r.score || 0}%; background:${col}"></i></div></div>
       ${(r.parts || []).length ? `<div class="why">${r.parts.map((p) => `<b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b> ${esc(p.label || "")} <span class="meta">(${Number(p.x).toFixed(2)} × ${p.weight})</span> ${esc(p.reason)}`).join("<br>")}</div>` : `<div class="why">No factor above zero: z = −4, score ${r.score}.</div>`}</div>`;
   }).join("") : `<p class="empty">Waiting for the first signup…</p>`;
@@ -280,6 +286,11 @@ function render(s) {
   drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
   renderTested(s.tested);
   renderBans(s.bans || [], s.ban_after);
+  const q = s.review_queue || [];
+  $("queue").innerHTML = q.length ? `<table><tr><th>#</th><th>Ticket</th><th>Who</th><th class="num">Score</th><th class="num">AI</th><th class="num">Rank</th><th>Top reason</th></tr>
+    ${q.map((r, k) => `<tr><td>${k + 1}</td><td class="mono">${esc(r.ticket || "")}</td><td class="mono">${esc(r.email)}</td><td class="num">${r.score}</td>
+      <td class="num">${r.ai_p == null ? "…" : Math.round(r.ai_p * 100) + "%"}</td><td class="num">${Math.round(r.rank * 100)}</td><td style="font-size:12px; color:var(--fg2)">${esc(r.reason)}</td></tr>`).join("")}</table>`
+    : `<p class="empty">Nothing needs a human look right now.</p>`;
   if (s.model && !$("ftable").dataset.done) {
     $("bias").textContent = String(s.model.bias).replace("-", "−");
     $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${f.group ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");

@@ -72,7 +72,7 @@ def _db() -> sqlite3.Connection:
     have = {r[1] for r in con.execute("PRAGMA table_info(signups)")}
     for col, kind in (("score", "INTEGER"), ("score_at_signup", "INTEGER"), ("parts", "TEXT"),
                       ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT"),
-                      ("behaviour", "TEXT"), ("d1", "TEXT")):
+                      ("behaviour", "TEXT"), ("d1", "TEXT"), ("ai_meta", "TEXT")):
         if col not in have:
             con.execute(f"ALTER TABLE signups ADD COLUMN {col} {kind}")
     con.execute("""CREATE TABLE IF NOT EXISTS bans (
@@ -190,6 +190,7 @@ def _simulated_customers() -> None:
 def start_background() -> None:
     if SIM_EVERY > 0:
         threading.Thread(target=_simulated_customers, daemon=True, name="simulated-customers").start()
+    threading.Thread(target=_ai_worker, daemon=True, name="ai-worker").start()
     with _lock:
         _rejudge()
         _con.commit()
@@ -399,6 +400,7 @@ def guard_state(since_version: int = -1) -> dict:
             continue
         member_rows = [rows[m] for m in members if m in rows]
         groups.append({"action": c["action"], "size": c["size"], "live": len(members),
+                       "ai_summary": _summaries.get(min(members), ("", ""))[1],
                        "attack": sum(r["source"] == "attack" for r in member_rows),
                        "evidence": [e["text"] for e in c["evidence"]], "timing": c["timing"], "why": c["why"],
                        "organisation": c["organisation"], "last": max(r["created_at"] for r in member_rows)})
@@ -415,13 +417,14 @@ def guard_state(since_version: int = -1) -> dict:
         "history_rows": len(HISTORY), "live_rows": len(rows), "recent_30min": len(recent),
         "scoreboard": scoreboard, "campaigns": campaigns, "timeline": timeline, "groups": groups[:6],
         "score_hist": score_hist, "score_bins": bins, "tested": _evaluation_summary(), "model": report.get("model"),
-        "bans": bans, "ban_after": BAN_AFTER,
+        "bans": bans, "ban_after": BAN_AFTER, "review_queue": _review_queue(rows.values()),
         "feed": [{"id": r["id"], "time": r["created_at"], "email": _mask(r["email"]), "source": r["source"],
                   "campaign": r["campaign"], "action": r["action_now"], "at_signup": r["action_at_signup"],
                   "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3],
                   "parts": json.loads(r["parts"] or "[]")[:3],
                   "ticket": r["ticket"], "score": r["score"], "score_at_signup": r["score_at_signup"],
-                  "history": json.loads(r["history"] or "[]")[-12:]} for r in feed],
+                  "history": json.loads(r["history"] or "[]")[-12:],
+                  "ai_p": (json.loads(r["ai_meta"]) or {}).get("p_bot") if r["ai_meta"] else None} for r in feed],
     }
 
 
@@ -437,6 +440,7 @@ def guard_reset(request: Request) -> dict:
     with _lock:
         _con.execute("DELETE FROM signups")
         _con.execute("DELETE FROM bans")
+        _summaries.clear()
         _rejudge()
         _con.commit()
     return {"ok": True}
@@ -655,3 +659,99 @@ def ask_d1(email: str, horse_name: str) -> str:
     except Exception as exc:  # fail open: never block a signup because the model is unavailable
         print(f"d1 unavailable: {exc}")
         return ""
+
+
+# ---------------------------------------------------------------- AI where it measurably helps
+# Benchmarks (data/bench/*.json) showed the algorithm decides best. AI is used
+# for two jobs it does better, neither of which changes a verdict:
+#   * d1 over all the evidence, blended with the algorithm, ranks the review
+#     queue (ranking AUC 0.90 -> 0.94 on the labelled set, same decisions).
+#   * LFM3-VL-2B writes a two-sentence plain-language summary of each swarm.
+# A background thread does both, one call at a time, so signups never wait.
+import d1_meta  # noqa: E402
+import lfm_judge  # noqa: E402
+
+LFM_URL = os.environ.get("LFM_URL", "")
+_summaries: dict[str, tuple[str, str]] = {}   # earliest member id -> (group signature, summary)
+SUMMARY_SCHEMA = {"type": "object", "properties": {"summary": {"type": "string", "maxLength": 400}}, "required": ["summary"]}
+SUMMARY_SYSTEM = ("You write for the owner of a small website. In under 40 words and two plain sentences, say what this group "
+                  "of signups looks like and what the owner should do. Use only the facts given, with their exact numbers. "
+                  "Reply with JSON only.")
+
+
+def lfm_summary(cluster: dict, live_members: int) -> str:
+    facts = {"verdict": cluster["action"], "signups_in_group": cluster["size"], "from_live_site": live_members,
+             "shared": [e["text"] for e in cluster["evidence"]][:4], "timing": cluster["timing"], "why": cluster["why"][:1]}
+    body = {"messages": [{"role": "system", "content": SUMMARY_SYSTEM}, {"role": "user", "content": json.dumps(facts)}],
+            "temperature": 0.2, "max_tokens": 120, "chat_template_kwargs": {"enable_thinking": False},
+            "response_format": {"type": "json_schema", "json_schema": {"name": "summary", "schema": SUMMARY_SCHEMA}}}
+    req = urllib.request.Request(LFM_URL.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as res:
+        return json.loads(json.loads(res.read())["choices"][0]["message"]["content"])["summary"][:400]
+
+
+def _ai_step() -> bool:
+    with _lock:
+        report, offset, live_ids = _state["report"], _state.get("offset", 0), list(_state.get("live_ids", []))
+        rows = {r["id"]: r for r in _live_rows(time.time() - WINDOW_DAYS * 86400)}
+    if report is None:
+        return False
+    clusters = {c["id"]: c for c in report["clusters"]}
+    if D1_URL:   # one second opinion per step, newest signup first; redo when its score moves by 10+
+        for k in range(len(live_ids) - 1, -1, -1):
+            r = rows.get(live_ids[k])
+            if not r or r["score"] is None:
+                continue
+            meta = json.loads(r["ai_meta"]) if r["ai_meta"] else None
+            if meta and abs(meta.get("at_score", -99) - r["score"]) < 10:
+                continue
+            group = clusters.get(report["cluster_of"][offset + k])
+            state = d1_meta.evidence_state({"email": r["email"], "username": r["username"]},
+                                           json.loads(r["parts"] or "[]"), group)
+            a = d1_meta.ask(D1_URL, state, timeout=20)
+            with _lock:
+                _con.execute("UPDATE signups SET ai_meta = ? WHERE id = ?",
+                             (json.dumps({"p_bot": round(a["p_bot"], 3), "at_score": r["score"]}), r["id"]))
+                _con.commit()
+                _state["version"] += 1
+            return True
+    if LFM_URL:  # one swarm summary per step; refreshed when the group grows by 3+ or its evidence changes
+        for c in report["clusters"]:
+            members = [live_ids[i - offset] for i in c.get("members", []) if 0 <= i - offset < len(live_ids)]
+            if not members:
+                continue
+            sig = f"{c['action']}|{len(members) // 3}|" + "|".join(sorted(e["text"][:40] for e in c["evidence"]))
+            key = min(members)
+            if _summaries.get(key, ("", ""))[0] == sig:
+                continue
+            _summaries[key] = (sig, lfm_summary(c, len(members)))
+            with _lock:
+                _state["version"] += 1
+            return True
+    return False
+
+
+def _ai_worker() -> None:
+    while True:
+        try:
+            busy = _ai_step()
+        except Exception as exc:  # never let the AI worker take the site down
+            print(f"ai worker: {exc}")
+            busy = False
+        time.sleep(0.3 if busy else 2.0)
+
+
+def _review_queue(rows) -> list[dict]:
+    """Signups worth a human look, most suspicious first: the algorithm's score
+    blended with d1's second opinion. Blocked signups need no review."""
+    out = []
+    for r in rows:
+        if r["action_now"] == "block" or r["score"] is None or (r["action_now"] != "review" and r["score"] < 15):
+            continue
+        p = (json.loads(r["ai_meta"]) or {}).get("p_bot") if r["ai_meta"] else None
+        blend = (r["score"] / 100 + p) / 2 if p is not None else r["score"] / 100
+        out.append({"ticket": r["ticket"], "email": _mask(r["email"]), "source": r["source"], "score": r["score"],
+                    "ai_p": p, "rank": round(blend, 3), "action": r["action_now"],
+                    "reason": (json.loads(r["reasons"] or "[]") or [""])[0][:140]})
+    return sorted(out, key=lambda q: -q["rank"])[:8]

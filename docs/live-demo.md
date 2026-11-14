@@ -1,102 +1,37 @@
 # Live demo runbook
 
-A fictional small business, **Ruska Bookings**, offers a 14-day free trial. Free-Tier Guard judges every trial signup the moment it arrives, and re-judges the recent stream each time, so a farm that looked fine at first is caught and its earlier accounts suspended as it grows. One laptop attacks the site over the internet; another shows the dashboard.
-
-| Address | What it is |
-|---|---|
-| `https://trial.<domain>` | The business site with the trial form. Judges can sign up from their phones. |
-| `https://guard.<domain>` | The live dashboard: scoreboard, signups per 30 s, swarms found, live feed. |
-| `https://<domain>` | The analysis tools: post swarm detector, `/signups` page. |
-
-Locally the same pages are at `http://127.0.0.1:8000/trial` and `/guard`.
-
-## What is live and what is simulated
-
-- **Live:** every trial signup (yours, the judges', the attack script's), every verdict, re-judging, retroactive suspension, the dashboard.
-- **Simulated, and labelled as such on the dashboard:** two weeks of ordinary signups loaded as history, so the timing tests have a baseline, and a stream of "ordinary customers" (one every 20 s on average, `GUARD_SIM_EVERY`) so there is normal traffic around the attack.
-- **The scoreboard's answer key:** the attack script sends a header with its campaign name (`X-Demo-Truth`, checked against `GUARD_DEMO_KEY`). It is stored for the scoreboard only and never given to the detector. Anything without it counts as a real visitor.
-- **What the trial form collects:** a device hash (browser properties and a canvas drawing), how long the form took, the browser's automation flag, and a hidden field people never see. No passwords. The page says to use any address; nothing is sent.
-
-## Live bot scores
-
-Every signup gets a **bot score from 0 to 100** with the points and reason behind it. The score is the stronger of the per-signup checks and the verdict of the group the signup belongs to (block 90, review 55, organisation 40). Under 35 is allowed, 35 to 59 goes to review, 60 and over is blocked. It is a ranking score with stated rules, not a calibrated probability.
-
-- **On the phone:** after signing up, the trial page shows your ticket (e.g. `VCXN`), your live score, the reasons and how the score has moved. It updates every 2 seconds. Sign up again from the same phone and watch it climb.
-- **On the dashboard:** every person by ticket with their live score, the points per reason, and "score at signup → now" when a farm is caught later. Also a live histogram of scores by source, and the results on the forged logs.
-- **Tested on forged bot activity logs** (`scripts/eval_signups.py`, 10 logs with an answer key): AUC 0.92; 0 of 16,864 people score 70 or more; 85.7% of bots do (73.7% on hard logs).
-
-## The three pages for the review
+## The three pages
 
 | Laptop | Page | Address |
 |---|---|---|
-| 1 | Analytics dashboard: live scores, the score formula, swarms, results on the forged logs, QR code | https://guard.179-67-199-198.sslip.io |
-| 2 | Free-trial signup for real people (or their phones via the QR code) | https://trial.179-67-199-198.sslip.io |
-| 3 | Attack console: unlock with the demo key, launch a campaign (fixed size, runs once) | https://attack.179-67-199-198.sslip.io |
+| 1 | **Sargas dashboard**: live scores per person (ticket, factors, AI opinion), swarms with AI summaries, review queue, IP bans, accuracy on labelled data, QR code | https://guard.botswarm.tech |
+| 2 | **Neighbr signup** ("Tinder for horses"). Judges sign up on their own phones via the QR code and see their live bot score | https://botswarm.tech |
+| 3 | **Attack console**: paste the demo key, press Launch. Each campaign sends a fixed number of signups and stops | https://attack.botswarm.tech |
 
-Only real visitors and the campaigns launched from the console appear. "Reset demo" on the console clears everything between groups of reviewers.
+Backup addresses (same server): `guard.`, `trial.` and `attack.179-67-199-198.sslip.io`.
 
-## Where it runs now
+The demo key is in `deploy/.env` (not in git): `grep GUARD_DEMO_KEY deploy/.env | cut -d= -f2`.
 
-- Trial site: **https://trial.179-67-199-198.sslip.io** (and https://trial.botswarm.site once the domain resolves)
-- Dashboard: **https://guard.179-67-199-198.sslip.io** (later https://guard.botswarm.site)
-- Server: Hostinger VPS 179.67.199.198, project in `/opt/botswarm`, settings in `deploy/.env` (not in git).
-- Update after a code change: `rsync` the repo to `/opt/botswarm`, then `docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build`.
+## Before each group of judges
 
-## Deploy (Hostinger VPS)
+- Console: **Reset demo** (click twice). Clears live signups, bans and AI summaries.
+- Attack laptop on a **phone hotspot**, judges on **their own phones** (mobile data if the venue wifi is slow).
 
-1. DNS: point `A` records for `<domain>`, `trial.<domain>` and `guard.<domain>` at the VPS IP.
-2. On the VPS (Docker template), with the repository checked out:
-   ```bash
-   DOMAIN=<domain> GUARD_DEMO_KEY=$(openssl rand -hex 12) bash deploy/deploy.sh
-   ```
-   Write the key down; the attack laptop needs it. Caddy fetches HTTPS certificates automatically once DNS resolves.
-3. Check from a phone on mobile data: `https://trial.<domain>` and `https://guard.<domain>`.
+## Campaigns on the console
 
-The image was built and attacked locally (Docker on macOS) before deployment: 27 of 27 attack signups blocked, simulated customers allowed.
+| Campaign | Signups | What it shows |
+|---|---|---|
+| naive-bot | 12 | Throwaway inbox, hidden field, no mouse: blocked at once; its IP is banned after 2 accounts and the rest bounce at the door. |
+| alias-farm | 10 | One Gmail inbox with dots and +tags, a script fills the form (no mouse/typing): blocked from the 5th. |
+| stealth-farm | 15 | Realistic names, new proxy IP each time, robotic mouse, 3 devices. The first few get in; when the group forms, all are blocked, earlier ones included ("caught after signup"). IP bans cannot stop it. |
+| humanlike | 6 | Replays human input with varied details. Our honest miss: it gets in. |
 
-## Demo setup (three laptops)
+## What is live and what is not
 
-| Laptop | Shows |
-|---|---|
-| 1 | `trial.<domain>`, the business site. Judges sign up here, or scan the QR code on the dashboard with their own phone (better: each phone is its own device). |
-| 2 | A terminal running the attack. **Use a phone hotspot**, not the venue wifi, so judges and attacker don't share an IP address. |
-| 3 | `guard.<domain>`, full screen. |
+- Live: every signup and verdict, re-judging, IP bans, behaviour signals, d1 factor and second opinions, LFM3 summaries.
+- Not shown as users: two weeks of simulated past signups used only as the timing baseline.
+- Live signups (including real emails and IPs) are stored on the VPS until Reset. Delete everything after the event: `docker compose --env-file deploy/.env -f deploy/docker-compose.yml down -v`.
 
-Attack (laptop 2, Python 3.9+ only, no installs):
-```bash
-python3 scripts/attack_demo.py https://trial.<domain> --key <GUARD_DEMO_KEY>
-python3 scripts/attack_demo.py https://trial.<domain> --key <KEY> --include-miss   # also the campaign we expect to miss
-python3 scripts/attack_demo.py https://trial.<domain> --key <KEY> --campaigns stealth-farm --speed 2
-```
+## Deploy or update
 
-Reset between demos (deletes live signups, keeps history):
-```bash
-curl -X POST -H "X-Demo-Key: <KEY>" https://guard.<domain>/api/guard/reset
-```
-
-## A 90-second script
-
-1. Laptop 3: "This is a small booking company's free trial, watched live." Point at the simulated customers trickling in and being allowed.
-2. Invite a judge to sign up on laptop 1 or their phone. It is allowed.
-3. Laptop 2: start the attack.
-   - **naive-bot:** blocked on its own signals (throwaway inbox, hidden field filled).
-   - **alias-farm:** one Gmail inbox, dots and +tags. Review from the 2nd account, blocked from the 5th.
-   - **stealth-farm:** each account looks fine alone. The first four get in. On the fifth the group forms: one email pattern, one stale browser build, 3 devices, timing faster than chance. Everything is blocked, and the dashboard shows "4 caught after signup".
-4. Point at the swarm panel: the reasons are in plain language.
-5. Honest close: run `--include-miss` or name it. A careful operator who varies everything gets through when they use residential proxies. In this demo it lands in review only because every attack comes from one laptop's IP.
-
-## What we measured in this setup (local run, 2026-11-14)
-
-| Campaign | Sent | Blocked at signup | Final |
-|---|---|---|---|
-| naive-bot | 12 | 12 | 12 blocked |
-| alias-farm | 10 | 6 (3 review, 1 in) | all 10 blocked |
-| stealth-farm | 15 | 11 (4 in) | all 15 blocked |
-| humanlike | 6 | 0 (6 review) | review, through the shared IP only |
-
-## Known limits of the live setup
-
-- No IP-to-network lookup on the server yet, so the datacenter/VPN check does not run on live signups.
-- All attack traffic comes from one laptop. Real farms rotate residential IPs. That case is covered in the simulated evaluation (`docs/signup-guard.md`), not here.
-- Judges signing up one after another on the **same** demo laptop share a device. From the fifth on they look like a device farm. That is correct behaviour, but use phones.
-- One server process re-judges about 3,400 history rows plus live signups on each signup (about 0.3 to 0.5 s). Fine for a demo. A busy site would re-judge in batches.
+On the VPS in `/opt/botswarm`: `docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build`. Services: `app` (FastAPI), `llm` (llama.cpp + d1-omni-600M), `lfm` (llama.cpp + LFM3-VL-2B), `caddy` (HTTPS for every host in `SITE_HOSTS`).
