@@ -74,10 +74,14 @@ def _db() -> sqlite3.Connection:
                       ("history", "TEXT"), ("ticket", "TEXT"), ("token", "TEXT")):
         if col not in have:
             con.execute(f"ALTER TABLE signups ADD COLUMN {col} {kind}")
+    con.execute("""CREATE TABLE IF NOT EXISTS bans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, ip TEXT UNIQUE, reason TEXT, accounts INTEGER, refused INTEGER DEFAULT 0,
+        enabled INTEGER DEFAULT 1, created_at REAL, last_seen REAL, source TEXT)""")
     return con
 
 
 _con = _db()
+BAN_AFTER = int(os.environ.get("GUARD_BAN_AFTER", "2"))   # blocked accounts from one IP before it is banned
 
 
 def _history() -> pd.DataFrame:
@@ -116,11 +120,25 @@ def judge(row: dict, source: str, campaign: str = "") -> dict:
                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                      [row[f] for f in FIELDS] + [source, campaign, ticket, token, "[]"])
         _rejudge()
+        _update_bans()
         out = _con.execute("SELECT action_now, reasons, score, parts FROM signups WHERE id = ?", (row["id"],)).fetchone()
         _con.execute("UPDATE signups SET action_at_signup = action_now, score_at_signup = score WHERE id = ?", (row["id"],))
         _con.commit()
         return {"id": row["id"], "ticket": ticket, "token": token, "action": out["action_now"], "score": out["score"],
                 "parts": json.loads(out["parts"] or "[]"), "reasons": json.loads(out["reasons"] or "[]")}
+
+
+def _update_bans() -> None:
+    """Ban an IP once BAN_AFTER of its signups are blocked. A ban that was
+    switched off on the dashboard stays off; its count still updates."""
+    now = time.time()
+    rows = _con.execute("SELECT ip, COUNT(*) AS n, MAX(source) AS src, MAX(reasons) AS why FROM signups "
+                        "WHERE action_now = 'block' AND ip != '' GROUP BY ip HAVING COUNT(*) >= ?", (BAN_AFTER,)).fetchall()
+    for r in rows:
+        reason = (json.loads(r["why"] or "[]") or ["Blocked signups from this address."])[0][:200]
+        _con.execute("INSERT INTO bans (ip, reason, accounts, created_at, last_seen, source) VALUES (?,?,?,?,?,?) "
+                     "ON CONFLICT(ip) DO UPDATE SET accounts = excluded.accounts",
+                     (r["ip"], reason, r["n"], now, now, r["src"]))
 
 
 def _rejudge() -> None:
@@ -217,6 +235,18 @@ def trial_signup(item: TrialSignup, request: Request) -> dict:
     campaign = ""
     if truth and DEMO_KEY and truth.split(":", 1)[0] == DEMO_KEY:
         campaign = truth.split(":", 1)[1][:40] if ":" in truth else "attack"
+    with _lock:
+        ban = _con.execute("SELECT id, accounts FROM bans WHERE ip = ? AND enabled = 1", (ip,)).fetchone()
+        if ban:
+            _con.execute("UPDATE bans SET refused = refused + 1, last_seen = ? WHERE id = ?", (time.time(), ban["id"]))
+            _con.commit()
+            _state["version"] += 1
+    if ban:
+        why = f"This IP address is on Sargas's ban list ({ban['accounts']} bot accounts came from it). Refused at the door."
+        return {"id": None, "ticket": None, "action": "block", "banned": True, "score": 100,
+                "message": "Neigh. Your IP is banned by Sargas. The stable door is shut, bestie. 🚫🐴",
+                "reasons": [why] if campaign else [], "parts": [{"key": "ip_ban", "label": "IP on the ban list", "x": 1,
+                "weight": 0, "contribution": 0, "points": 0, "reason": why, "kind": "ban"}]}
     row = {"id": f"t-{secrets.token_hex(5)}", "created_at": time.time(), "email": item.email.strip(),
            "username": item.business.strip(), "ip": ip, "asn": "", "asn_org": "",
            "user_agent": request.headers.get("user-agent", "")[:300], "device_id": item.device_id.strip(),
@@ -289,6 +319,10 @@ def guard_state(since_version: int = -1) -> dict:
         live_ids = list(_state["live_ids"])
         offset = _state["offset"]
         rows = {r["id"]: r for r in _live_rows(time.time() - WINDOW_DAYS * 86400)}
+        bans = [{"id": b["id"], "ip": _mask_ip(b["ip"]), "reason": b["reason"], "accounts": b["accounts"],
+                 "refused": b["refused"], "enabled": bool(b["enabled"]), "since": b["created_at"],
+                 "last_seen": b["last_seen"], "source": b["source"]}
+                for b in _con.execute("SELECT * FROM bans ORDER BY created_at DESC").fetchall()]
     now = time.time()
     since = now - 30 * 60
     recent = [r for r in rows.values() if r["created_at"] >= since]
@@ -343,6 +377,7 @@ def guard_state(since_version: int = -1) -> dict:
         "history_rows": len(HISTORY), "live_rows": len(rows), "recent_30min": len(recent),
         "scoreboard": scoreboard, "campaigns": campaigns, "timeline": timeline, "groups": groups[:6],
         "score_hist": score_hist, "score_bins": bins, "tested": _evaluation_summary(), "model": report.get("model"),
+        "bans": bans, "ban_after": BAN_AFTER,
         "feed": [{"id": r["id"], "time": r["created_at"], "email": _mask(r["email"]), "source": r["source"],
                   "campaign": r["campaign"], "action": r["action_now"], "at_signup": r["action_at_signup"],
                   "risk": r["risk"], "reasons": json.loads(r["reasons"] or "[]")[:3],
@@ -363,6 +398,7 @@ def guard_reset(request: Request) -> dict:
     _check_key(request)
     with _lock:
         _con.execute("DELETE FROM signups")
+        _con.execute("DELETE FROM bans")
         _rejudge()
         _con.commit()
     return {"ok": True}
@@ -403,24 +439,38 @@ _attack: dict = {"running": False, "stop": False, "campaign": None, "sent": 0, "
 _attack_lock = threading.Lock()
 
 
+def _source_ip(campaign: str, k: int, rng: random.Random) -> str:
+    """Where each console bot appears to come from, using documentation-only
+    address ranges (RFC 5737), so nothing real is ever named. A naive bot sits
+    on one cloud server; farms rotate residential proxies, which is why an IP
+    ban alone cannot stop them."""
+    if campaign == "naive-bot":
+        return "203.0.113.66"
+    if campaign == "alias-farm":
+        return f"198.51.100.{20 + k % 3}"
+    return f"{rng.choice(DEMO_NETS)}{rng.randrange(1, 255)}"
+
+
 def _run_attack(campaign: str, speed: float) -> None:
     rng = random.Random()
     items = list(attack_demo.CAMPAIGNS[campaign](rng))
     with _attack_lock:
         _attack.update(running=True, stop=False, campaign=campaign, sent=0, total=len(items))
     try:
-        for body, ua, delay in items:
+        for k, (body, ua, delay) in enumerate(items):
             if _attack["stop"]:
                 break
             req = urllib.request.Request(SELF_URL + "/api/trial/signup", data=json.dumps(body).encode(),
                                          headers={"Content-Type": "application/json", "User-Agent": ua,
-                                                  "X-Demo-Truth": f"{DEMO_KEY}:{campaign}"})
+                                                  "X-Demo-Truth": f"{DEMO_KEY}:{campaign}",
+                                                  "X-Forwarded-For": _source_ip(campaign, k, rng)})
             try:
                 with urllib.request.urlopen(req, timeout=30) as res:
                     r = json.loads(res.read())
             except (urllib.error.URLError, ValueError) as exc:
                 r = {"action": "error", "reasons": [str(exc)[:120]]}
             entry = {"t": time.time(), "campaign": campaign, "email": body["email"], "action": r.get("action"),
+                     "ip": req.get_header("X-forwarded-for"), "banned": bool(r.get("banned")),
                      "score": r.get("score"), "ticket": r.get("ticket"),
                      "reason": (r.get("reasons") or [""])[0][:240]}
             with _attack_lock:
@@ -480,3 +530,38 @@ def attack_status(request: Request) -> dict:
 @router.get("/attack")
 def attack_page() -> FileResponse:
     return FileResponse(STATIC / "attack.html", media_type="text/html")
+
+
+# ---------------------------------------------------------------- ban list
+
+DEMO_NETS = ("192.0.2.", "198.51.100.", "203.0.113.")    # documentation ranges used by the console's bots
+
+
+def _mask_ip(ip: str) -> str:
+    """Console bots use documentation-only addresses and are shown in full;
+    a real visitor's address is shown without its last part."""
+    if ip.startswith(DEMO_NETS) or ip in {"127.0.0.1", "testclient"}:
+        return ip
+    if ip.count(".") == 3:
+        return ip.rsplit(".", 1)[0] + ".•••"
+    if ":" in ip:
+        return ":".join(ip.split(":")[:3]) + ":•••"
+    return "•••"
+
+
+class BanToggle(BaseModel):
+    id: int
+    enabled: bool
+
+
+@router.post("/api/guard/ban")
+def ban_toggle(item: BanToggle, request: Request) -> dict:
+    """Switch one ban on or off. Needs the demo key."""
+    _check_key(request)
+    with _lock:
+        cur = _con.execute("UPDATE bans SET enabled = ? WHERE id = ?", (1 if item.enabled else 0, item.id))
+        _con.commit()
+        _state["version"] += 1
+    if not cur.rowcount:
+        raise HTTPException(404, "No such ban.")
+    return {"ok": True}

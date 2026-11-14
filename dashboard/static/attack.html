@@ -85,8 +85,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700
 
   <div class="panel">
     <h2>What the site answered, signup by signup</h2>
-    <div class="scroll"><table><thead><tr><th>Campaign</th><th>Email used</th><th>Verdict</th><th style="text-align:right">Score</th><th>Why (the guard's reason)</th></tr></thead>
-      <tbody id="log"><tr><td colspan="5" class="msg">Nothing sent yet.</td></tr></tbody></table></div>
+    <div class="scroll"><table><thead><tr><th>Campaign</th><th>From IP</th><th>Email used</th><th>Verdict</th><th style="text-align:right">Score</th><th>Why (the guard's reason)</th></tr></thead>
+      <tbody id="log"><tr><td colspan="6" class="msg">Nothing sent yet.</td></tr></tbody></table></div>
   </div>
 </div>
 <script>
@@ -139,9 +139,9 @@ async function poll(once) {
     $("log").innerHTML = s.log.length ? s.log.map((r) => {
       const id = `${r.t}-${r.email}`, isNew = !seen.has(id); seen.add(id);
       const cls = r.action === "block" ? "b" : r.action === "review" ? "r" : r.action === "allow" ? "a" : "";
-      return `<tr class="${isNew ? "row-new" : ""}"><td class="mono">${esc(r.campaign)}</td><td class="mono">${esc(r.email)}</td>
+      return `<tr class="${isNew ? "row-new" : ""}"><td class="mono">${esc(r.campaign)}</td><td class="mono">${esc(r.ip || "")}${r.banned ? ' <span class="b">BANNED IP</span>' : ""}</td><td class="mono">${esc(r.email)}</td>
         <td class="${cls} mono">${esc((r.action || "").toUpperCase())}</td><td class="num ${cls}">${r.score ?? "–"}</td><td>${esc(r.reason || (r.action === "allow" ? "No check failed yet." : ""))}</td></tr>`;
-    }).join("") : `<tr><td colspan="5" class="msg">Nothing sent yet.</td></tr>`;
+    }).join("") : `<tr><td colspan="6" class="msg">Nothing sent yet.</td></tr>`;
   } catch (e) {
     $("keyMsg").textContent = key ? e.message : "";
   }

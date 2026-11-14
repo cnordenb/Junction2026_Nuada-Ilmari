@@ -44,6 +44,13 @@ h1 { font: 700 26px var(--display); margin: 0; display: flex; align-items: cente
 .formula .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; color: var(--fg2); }
 .formula .cols b { color: var(--fg); font-family: var(--mono); }
 .formula .sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.banadmin input { font: 12px var(--mono); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; width: 140px; }
+.banadmin button, .tog { font: 600 12px var(--body); background: var(--panel2); color: var(--fg); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.tog.on { background: color-mix(in srgb, var(--block) 22%, transparent); border-color: var(--block); color: var(--block); }
+.tog.off { color: var(--muted); }
+.tog:disabled { cursor: default; opacity: .85; }
+tr.off td { color: var(--muted); text-decoration: line-through; }
+tr.off td:last-child { text-decoration: none; }
 .b { color: var(--block); } .r { color: var(--review); } .a { color: var(--allow); }
 .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
@@ -137,6 +144,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
   <div class="grid">
     <div class="panel"><h2>Swarms detected right now</h2><div id="groups"><p class="empty">No groups of linked signups yet.</p></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:18px">
+        <h2 style="margin:0">Banned IPs (refused at the door)</h2>
+        <span class="banadmin"><input id="banKey" type="password" placeholder="demo key to edit" aria-label="Demo key to edit bans"><button id="banUnlock">Edit</button></span></div>
+      <div id="bans" style="margin-top:8px"><p class="empty">No banned IPs yet.</p></div>
       <h2 style="margin-top:18px">Attack campaigns (answer key from the attack script)</h2><div id="campaigns"><p class="empty">No attack yet.</p></div></div>
     <div class="panel"><h2>People being scored live</h2><div class="feed" id="feed"><p class="empty">Waiting for the first signup…</p></div></div>
   </div>
@@ -202,6 +213,25 @@ function drawHist(svg, series, log = false) {
   out += `<line x1="${3.5 * bw}" x2="${3.5 * bw}" y1="0" y2="${H - pad}" stroke="var(--review)" stroke-dasharray="3 3"/><line x1="${6 * bw}" x2="${6 * bw}" y1="0" y2="${H - pad}" stroke="var(--block)" stroke-dasharray="3 3"/>`;
   svg.innerHTML = out;
 }
+let banKey = "";
+try { banKey = sessionStorage.getItem("demoKey") || ""; } catch (e) {}
+$("banKey").value = banKey;
+$("banUnlock").onclick = () => { banKey = $("banKey").value.trim(); try { sessionStorage.setItem("demoKey", banKey); } catch (e) {} version = -1; };
+function renderBans(bans, after) {
+  $("bans").innerHTML = bans.length ? `<table><tr><th>IP</th><th class="num">Bot accounts</th><th class="num">Refused since</th><th>Why</th><th>Ban</th></tr>
+    ${bans.map((b) => `<tr class="${b.enabled ? "" : "off"}"><td class="mono">${esc(b.ip)}</td><td class="num">${b.accounts}</td><td class="num">${b.refused}</td>
+      <td style="font-size:12px; color:var(--fg2)">${esc(b.reason).slice(0, 110)}</td>
+      <td><button class="tog ${b.enabled ? "on" : "off"}" data-id="${b.id}" data-on="${b.enabled ? 1 : 0}" ${banKey ? "" : "disabled title=\"Enter the demo key to edit\""}>${b.enabled ? "ON" : "OFF"}</button></td></tr>`).join("")}</table>`
+    : `<p class="empty">No banned IPs yet. An IP is banned after ${after} blocked accounts.</p>`;
+  $("bans").querySelectorAll("button.tog").forEach((btn) => btn.onclick = async () => {
+    try {
+      const res = await fetch("/api/guard/ban", {method: "POST", headers: {"Content-Type": "application/json", "X-Demo-Key": banKey},
+        body: JSON.stringify({id: Number(btn.dataset.id), enabled: btn.dataset.on !== "1"})});
+      if (!res.ok) throw new Error(res.status === 403 ? "Wrong demo key." : "Could not change the ban.");
+      version = -1;
+    } catch (e) { btn.textContent = e.message; }
+  });
+}
 let testedDrawn = false;
 function renderTested(t) {
   if (!t || testedDrawn) return;
@@ -244,6 +274,7 @@ function render(s) {
   s.feed.forEach((r) => { seen.add(r.id); lastScore[r.id] = r.score; }); first = false;
   drawHist($("liveHist"), [["attack", "var(--attack)"], ["visitor", "var(--visitor)"], ["simulated", "var(--sim)"]].map(([k, c]) => [s.score_hist[k], c]));
   renderTested(s.tested);
+  renderBans(s.bans || [], s.ban_after);
   if (s.model && !$("ftable").dataset.done) {
     $("bias").textContent = String(s.model.bias).replace("-", "−");
     $("ftable").innerHTML = s.model.factors.map((f, i) => `<div title="${esc(f.measure)}"><span class="${i >= 9 ? "g" : ""}">${esc(f.label)}</span><b>${f.weight > 0 ? "+" : "−"}${Math.abs(f.weight)}</b></div>`).join("");
