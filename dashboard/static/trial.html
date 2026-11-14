@@ -3,138 +3,218 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ruska Bookings</title>
+<title>Neighbr</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-/* A small Finnish booking-software company: warm autumn accent, calm neutrals. */
+/* A satirical horse-dating startup. Hay gold, paddock green, saddle brown. */
 :root {
-  --bg: #fbfaf8; --surface: #ffffff; --fg: #1d1a17; --fg2: #5b544c; --line: #e8e3dc;
-  --accent: #b4441f; --accent-ink: #ffffff; --accent-soft: #f7e6dd; --ok: #2c7a4b; --warn: #a06a00; --bad: #b3261e;
-  --display: "Fraunces", Georgia, serif; --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #fff8ec; --surface: #ffffff; --fg: #2a1a0e; --fg2: #6b5340; --line: #efdcc0;
+  --hay: #f2b632; --grass: #2f9e5b; --saddle: #8a4b1f; --nope: #d94a3d; --ink-on: #2a1a0e;
+  --ok: #2f9e5b; --warn: #c98400; --bad: #d94a3d;
+  --display: "Bricolage Grotesque", "Arial Black", system-ui, sans-serif; --body: "Inter", system-ui, -apple-system, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #141210; --surface: #1d1a17; --fg: #f2eee9; --fg2: #c2b9ae; --line: #332e29;
-    --accent: #e0703f; --accent-ink: #1a0f0a; --accent-soft: #3a2117; --ok: #5cc28a; --warn: #e2b04a; --bad: #f08079; color-scheme: dark; }
+  :root { --bg: #1a120b; --surface: #24190f; --fg: #fbefdf; --fg2: #cdb69c; --line: #3d2c1d;
+    --hay: #f5c04a; --grass: #49c07a; --saddle: #d08a54; --nope: #f06a5d; --ink-on: #1a120b;
+    --ok: #49c07a; --warn: #f0b13a; --bad: #f06a5d; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
-.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
-nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; }
-.logo { font: 700 22px var(--display); display: flex; align-items: center; gap: 8px; }
-.logo span { width: 14px; height: 14px; border-radius: 4px; background: var(--accent); display: inline-block; transform: rotate(45deg); }
-nav a { color: var(--fg2); text-decoration: none; margin-left: 18px; font-size: 15px; }
-.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: start; padding: 40px 0 56px; }
-@media (max-width: 820px) { .hero { grid-template-columns: 1fr; gap: 28px; padding-top: 16px; } }
-h1 { font: 700 clamp(34px, 5vw, 52px)/1.08 var(--display); letter-spacing: -0.02em; margin: 0 0 16px; text-wrap: balance; }
-.lede { font-size: 19px; color: var(--fg2); margin: 0 0 22px; max-width: 34em; }
-.points { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-.points li { display: flex; gap: 10px; }
-.points li::before { content: "✓"; color: var(--accent); font-weight: 700; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; box-shadow: 0 10px 30px rgba(60,40,20,.06); }
-.card h2 { font: 600 24px var(--display); margin: 0 0 4px; }
-.card .sub { color: var(--fg2); margin: 0 0 18px; font-size: 15px; }
-label { display: block; font-size: 14px; font-weight: 500; margin: 14px 0 5px; }
-input[type=text], input[type=email] { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
-  border-radius: 8px; padding: 11px 12px; }
-input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button { width: 100%; margin-top: 18px; font: 600 16px var(--body); background: var(--accent); color: var(--accent-ink); border: 0;
-  border-radius: 8px; padding: 13px; cursor: pointer; }
-button:disabled { opacity: .6; cursor: wait; }
-.fine { font-size: 13px; color: var(--fg2); margin-top: 12px; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 max(18px, env(safe-area-inset-left, 0px)); }
+.ticker { background: var(--fg); color: var(--bg); font: 700 13px var(--body); white-space: nowrap; overflow: hidden; }
+.ticker span { display: inline-block; padding: 7px 0; animation: tick 38s linear infinite; }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+nav { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; gap: 12px; }
+.logo { font: 800 28px var(--display); letter-spacing: -0.03em; display: flex; align-items: center; gap: 8px; }
+.logo .dot { width: 30px; height: 30px; border-radius: 9px; background: var(--hay); display: grid; place-items: center; font-size: 18px; transform: rotate(-8deg); }
+nav .pill { font: 700 13px var(--body); background: var(--grass); color: #fff; padding: 6px 12px; border-radius: 999px; }
+.hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 44px; align-items: start; padding: 26px 0 50px; }
+@media (max-width: 860px) { .hero { grid-template-columns: 1fr; gap: 26px; padding-top: 6px; } .hero > .card { order: -1; } }
+.kicker { display: inline-block; font: 700 13px var(--body); background: var(--hay); color: var(--ink-on); padding: 5px 10px; border-radius: 6px; transform: rotate(-1.5deg); margin-bottom: 14px; }
+h1 { font: 800 clamp(38px, 6.4vw, 68px)/1 var(--display); letter-spacing: -0.035em; margin: 0 0 14px; text-wrap: balance; }
+h1 em { font-style: normal; color: var(--saddle); }
+.lede { font-size: 19px; color: var(--fg2); margin: 0 0 8px; max-width: 32em; }
+.fine-star { font-size: 13px; color: var(--fg2); margin: 0 0 20px; }
+.deck { position: relative; height: 330px; max-width: 330px; margin-top: 8px; }
+.pcard { position: absolute; inset: 0; border-radius: 22px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(60,30,0,.14);
+  padding: 18px; display: flex; flex-direction: column; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s; }
+.pcard .pic { flex: 1; border-radius: 14px; display: grid; place-items: center; font-size: 96px; background: linear-gradient(160deg, #ffe7a8, #f7c96a); }
+.pcard h3 { font: 800 22px var(--display); margin: 10px 0 0; }
+.pcard p { margin: 2px 0 0; color: var(--fg2); font-size: 14px; }
+.pcard.out-l { transform: translateX(-130%) rotate(-18deg) !important; opacity: 0; }
+.pcard.out-r { transform: translateX(130%) rotate(18deg) !important; opacity: 0; }
+.swipes { display: flex; gap: 14px; margin-top: 14px; max-width: 330px; justify-content: center; }
+.swipes button { width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--line); background: var(--surface); font-size: 26px; cursor: pointer; }
+.swipes .match { border-color: var(--grass); } .swipes .nope { border-color: var(--nope); }
+.toast { font: 700 15px var(--body); min-height: 22px; margin-top: 8px; color: var(--grass); max-width: 330px; text-align: center; }
+.card { background: var(--surface); border: 2px solid var(--fg); border-radius: 18px; padding: 24px; box-shadow: 8px 8px 0 var(--hay); }
+.card h2 { font: 800 28px/1.1 var(--display); margin: 0 0 4px; letter-spacing: -0.02em; }
+.card .sub { color: var(--fg2); margin: 0 0 14px; font-size: 15px; }
+label { display: block; font-size: 14px; font-weight: 700; margin: 14px 0 5px; }
+input[type=text], input[type=email] { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 2px solid var(--line); border-radius: 10px; padding: 12px; }
+input:focus-visible, button:focus-visible { outline: 3px solid var(--hay); outline-offset: 2px; }
+.submit { width: 100%; margin-top: 18px; font: 800 18px var(--display); background: var(--grass); color: #fff; border: 2px solid var(--fg); border-radius: 12px; padding: 14px; cursor: pointer; box-shadow: 4px 4px 0 var(--fg); }
+.submit:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--fg); }
+.submit:disabled { opacity: .6; cursor: wait; }
+.fine { font-size: 12.5px; color: var(--fg2); margin-top: 12px; }
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.result { margin-top: 16px; padding: 14px 16px; border-radius: 10px; font-weight: 500; display: none; }
-.result.allow { display: block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
-.result.review { display: block; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
-.result.block { display: block; background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
-.result.error { display: block; background: var(--accent-soft); color: var(--fg); }
-.check { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--bg); }
+.result { margin-top: 16px; padding: 14px 16px; border-radius: 12px; font-weight: 700; display: none; }
+.result.allow { display: block; background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.result.review { display: block; background: color-mix(in srgb, var(--warn) 17%, transparent); color: var(--warn); }
+.result.block { display: block; background: color-mix(in srgb, var(--bad) 15%, transparent); color: var(--bad); }
+.result.error { display: block; background: color-mix(in srgb, var(--hay) 25%, transparent); color: var(--fg); }
+.check { margin-top: 18px; border: 2px dashed var(--fg2); border-radius: 14px; padding: 16px; background: var(--bg); }
 .check[hidden] { display: none; }
 .check .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.check .ticket { font: 600 13px ui-monospace, Menlo, monospace; color: var(--fg2); }
+.check .ticket { font: 700 13px ui-monospace, Menlo, monospace; color: var(--fg2); }
 .check .ticket b { font-size: 18px; color: var(--fg); letter-spacing: .08em; }
-.check .score { font: 700 54px/1 var(--display); font-variant-numeric: tabular-nums; }
-.check .score small { font: 500 16px var(--body); color: var(--fg2); }
-.gauge { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--ok) 0 35%, var(--warn) 35% 60%, var(--bad) 60% 100%); position: relative; margin: 10px 0 4px; opacity: .85; }
-.gauge i { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px; background: var(--fg); transition: left .6s ease; }
+.check .score { font: 800 58px/1 var(--display); font-variant-numeric: tabular-nums; }
+.check .score small { font: 600 16px var(--body); color: var(--fg2); }
+.gauge { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--ok) 0 35%, var(--warn) 35% 60%, var(--bad) 60% 100%); position: relative; margin: 10px 0 4px; }
+.gauge i { position: absolute; top: -5px; width: 5px; height: 22px; border-radius: 2px; background: var(--fg); transition: left .6s ease; }
 .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--fg2); }
-.check ul { margin: 10px 0 0; padding-left: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; }
-.check li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; }
+.check ul { margin: 10px 0 0; padding-left: 0; list-style: none; display: grid; gap: 7px; font-size: 14px; }
+.check li { display: grid; grid-template-columns: 46px 1fr; gap: 8px; }
 .check li b { font-variant-numeric: tabular-nums; text-align: right; }
 .check .live { font-size: 12px; color: var(--fg2); margin-top: 10px; display: flex; align-items: center; gap: 6px; }
-.check .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: blink 1.6s infinite; }
+.check .live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: blink 1.6s infinite; flex: none; }
+.share { margin-top: 10px; font: 700 14px var(--body); background: var(--hay); color: var(--ink-on); padding: 8px 10px; border-radius: 8px; }
 @keyframes blink { 50% { opacity: .3; } }
 #spark { width: 100%; height: 40px; display: block; margin-top: 8px; }
-@media (prefers-reduced-motion: reduce) { .gauge i { transition: none; } .check .live i { animation: none; } }
-.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; padding: 8px 0 56px; }
-.feature h3 { font: 600 19px var(--display); margin: 0 0 6px; }
-.feature p { color: var(--fg2); margin: 0; }
-.quote { border-top: 1px solid var(--line); padding: 36px 0; display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
-.quote .avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; font: 700 18px var(--display); color: var(--accent); }
-.quote p { margin: 0; font: 600 20px/1.4 var(--display); }
-.quote small { color: var(--fg2); font-size: 14px; }
-footer { border-top: 1px solid var(--line); padding: 22px 0 40px; font-size: 13px; color: var(--fg2); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+section.band { padding: 46px 0; border-top: 2px solid var(--line); }
+section.band h2 { font: 800 clamp(28px, 4vw, 40px)/1.05 var(--display); letter-spacing: -0.02em; margin: 0 0 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.feature { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.feature .em { font-size: 34px; }
+.feature h3 { font: 800 20px var(--display); margin: 6px 0 4px; }
+.feature p { margin: 0; color: var(--fg2); }
+.price { background: var(--surface); border: 2px solid var(--line); border-radius: 16px; padding: 20px; }
+.price.hot { border-color: var(--fg); box-shadow: 6px 6px 0 var(--grass); }
+.price h3 { margin: 0; font: 800 20px var(--display); }
+.price .amt { font: 800 36px var(--display); }
+.price ul { padding-left: 18px; color: var(--fg2); margin: 8px 0 0; }
+blockquote { margin: 0; background: var(--surface); border-radius: 16px; border: 1px solid var(--line); padding: 18px; font: 700 18px/1.35 var(--display); }
+blockquote cite { display: block; margin-top: 8px; font: 500 13px var(--body); color: var(--fg2); font-style: normal; }
+.logos { display: flex; flex-wrap: wrap; gap: 10px 26px; color: var(--fg2); font: 800 18px var(--display); opacity: .55; margin-top: 18px; }
+footer { border-top: 2px solid var(--line); padding: 24px 0 44px; font-size: 13px; color: var(--fg2); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 footer a { color: var(--fg2); }
+@media (prefers-reduced-motion: reduce) { .ticker span, .check .live i { animation: none; } .pcard, .gauge i { transition: none; } }
 </style>
 </head>
 <body>
+<div class="ticker" aria-hidden="true"><span>🐴 BREAKING: local stallion gets 400 matches, all of them bots 🐴 no cap, the most stable relationship app on the internet 🐴 Neighbr Gold now includes unlimited oats 🐴 Sargas has blocked 0 real horses today (we checked) 🐴 mane character energy only 🐴 skibidi saddle 🐴 POV: you swiped right on a bot farm 🐴 BREAKING: local stallion gets 400 matches, all of them bots 🐴 no cap, the most stable relationship app on the internet 🐴 Neighbr Gold now includes unlimited oats 🐴 Sargas has blocked 0 real horses today (we checked) 🐴 mane character energy only 🐴 skibidi saddle 🐴 POV: you swiped right on a bot farm 🐴&nbsp;</span></div>
 <div class="wrap">
-  <nav><div class="logo"><span></span>Ruska Bookings</div>
-    <div><a href="#features">Features</a><a href="#trial">Free trial</a></div></nav>
+  <nav><div class="logo"><span class="dot">🐴</span>Neighbr</div><span class="pill">Free tier for every foal</span></nav>
 
   <section class="hero">
     <div>
-      <h1>Online booking for small salons and studios</h1>
-      <p class="lede">Let customers book a haircut, a massage or a pottery class while you work. Ruska sends the reminders, takes the deposit
-        and keeps your calendar tidy. Built in Tampere for one-person businesses.</p>
-      <ul class="points">
-        <li>14 days free, no card needed</li>
-        <li>Your booking page live in ten minutes</li>
-        <li>SMS reminders that cut no-shows in half</li>
-      </ul>
+      <span class="kicker">It's Tinder, but for horses. Yes, really.</span>
+      <h1>Find your <em>soulmare.</em> No cap.</h1>
+      <p class="lede">Swipe right on that stallion from the next paddock. Neighbr matches horses on vibes, hay preference and aura points. Built for horses with mane character energy.</p>
+      <p class="fine-star">Free forever.* Unlimited oats.** Zero bots.***<br><small>*until the bots find it. **one bucket, shared. ***that's literally Sargas's job.</small></p>
+      <div class="deck" id="deck" aria-label="Example horse profiles"></div>
+      <div class="swipes"><button class="nope" id="nope" aria-label="Swipe left">❌</button><button class="match" id="yes" aria-label="Swipe right">💚</button></div>
+      <div class="toast" id="toast" role="status"></div>
     </div>
+
     <div class="card" id="trial">
-      <h2>Start your free trial</h2>
-      <p class="sub">14 days of everything. Cancel any time.</p>
+      <h2>Join the herd 🐎</h2>
+      <p class="sub">Free account, 10 seconds. Horses only. Bots get bounced by Sargas.</p>
       <form id="form" novalidate autocomplete="off">
-        <label for="email">Work email</label>
-        <input id="email" name="email" type="email" required maxlength="200" placeholder="you@yourstudio.fi">
-        <label for="business">Business name</label>
-        <input id="business" name="business" type="text" maxlength="100" placeholder="Studio Aino">
+        <label for="email">Email (your human can type it)</label>
+        <input id="email" name="email" type="email" required maxlength="200" placeholder="sir.trotsalot@paddock.fi">
+        <label for="business">Your horse's name</label>
+        <input id="business" name="business" type="text" maxlength="100" placeholder="Neigh-thaniel">
         <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
-        <button id="submit" type="submit">Start free trial</button>
+        <button class="submit" id="submit" type="submit">Giddy up 🐴</button>
         <div id="result" class="result" role="status"></div>
         <div id="check" class="check" hidden aria-live="polite">
           <div class="top"><span class="ticket">Your ticket <b id="ticket">····</b></span><span class="ticket" id="verdict"></span></div>
-          <div class="score"><span id="score">0</span><small> / 100 bot score</small></div>
+          <div class="score"><span id="score">0</span><small> / 100 bot (aura check)</small></div>
           <div class="gauge"><i id="needle" style="left:0%"></i></div>
-          <div class="scale"><span>person</span><span>review 35</span><span>block 60</span><span>bot</span></div>
+          <div class="scale"><span>real horse</span><span>sus 35</span><span>bot 60</span><span>caught in 4K</span></div>
           <svg id="spark" viewBox="0 0 300 40" preserveAspectRatio="none" aria-label="Your score over time"></svg>
           <ul id="parts"></ul>
-          <div class="live"><i></i><span id="liveNote">Updating live. Find your ticket on the big screen.</span></div>
+          <div class="share" id="share"></div>
+          <div class="live"><i></i><span id="liveNote">Updating live, fr fr. Find your ticket on the big screen.</span></div>
         </div>
-        <p class="fine">Demo site for Junction 2026. No email is sent and no account is created. Use any address.</p>
+        <p class="fine">Demo site for Junction 2026. No email is sent, no horse is harmed, no account is created. Use any address.</p>
       </form>
     </div>
   </section>
 
-  <section class="features" id="features">
-    <div class="feature"><h3>A booking page that looks like you</h3><p>Your services, prices and opening hours on one page customers can find from Instagram or Google.</p></div>
-    <div class="feature"><h3>Deposits for busy slots</h3><p>Ask for a small deposit on Friday afternoons so last-minute cancellations don't cost you a day's pay.</p></div>
-    <div class="feature"><h3>Reminders that work</h3><p>A text the day before and an hour before. Customers can move their own booking without calling.</p></div>
+  <section class="band">
+    <h2>Why horses are switching to Neighbr</h2>
+    <div class="grid3">
+      <div class="feature"><div class="em">🥕</div><h3>Rizz-o-meter</h3><p>Our AI rates your carrot game from "NPC pony" to "unspoken rizz stallion". Accuracy unknown. Vibes immaculate.</p></div>
+      <div class="feature"><div class="em">🌾</div><h3>Touch grass, literally</h3><p>First dates happen in a field. The only dating app where touching grass is the main feature.</p></div>
+      <div class="feature"><div class="em">🛡️</div><h3>Zero bot horses</h3><p>Every signup goes past Sargas, our bouncer. 400 fake mares from one laptop? Sargas has seen that before. Instant neigh.</p></div>
+    </div>
   </section>
 
-  <section class="quote">
-    <div class="avatar">LK</div>
-    <div><p>“I stopped answering the phone during haircuts. Bookings went up anyway.”</p><small>Laura K., hair salon owner, Pirkkala</small></div>
+  <section class="band">
+    <h2>Pricing (stable, unlike your ex)</h2>
+    <div class="grid3">
+      <div class="price"><h3>Foal</h3><div class="amt">€0</div><ul><li>5 swipes a day</li><li>1 bucket of oats (shared)</li><li>Sargas protection included</li></ul></div>
+      <div class="price hot"><h3>Neighbr Gold</h3><div class="amt">€0</div><ul><li>Unlimited swipes</li><li>Same oats, nicer bucket</li><li>You have to really mean it</li></ul></div>
+      <div class="price"><h3>Enterprise Stable</h3><div class="amt">Call us</div><ul><li>We will not pick up</li><li>We are horses</li><li>SLA: whenever</li></ul></div>
+    </div>
   </section>
 
-  <footer><span>Ruska Bookings is a fictional company made for a hackathon demo.</span>
-    <a id="guardLink" href="/guard">Signup protection by Free-Tier Guard</a></footer>
+  <section class="band">
+    <h2>Real horses. Real feelings.</h2>
+    <div class="grid3">
+      <blockquote>"Met my mare on Neighbr. Now we share a stable. Neigh regrets."<cite>Maregaret, 9, show jumper</cite></blockquote>
+      <blockquote>"Our startup got 4,000 signups overnight. 3,991 were bots. Sargas caught them before breakfast."<cite>Every free-tier founder, ever</cite></blockquote>
+      <blockquote>"I vibe-coded my own horse app in 11 minutes. It got 400 bot accounts in 12."<cite>A guy on X, probably</cite></blockquote>
+    </div>
+    <div class="logos" aria-label="Trusted by (satire)"><span>0 Fortune 500 companies</span><span>your mum</span><span>a Discord server</span><span>one (1) pony club</span><span>the Ohio Stable Authority</span></div>
+  </section>
+
+  <footer><span>Neighbr is a fictional horse-dating startup made for a Junction 2026 demo. This page was vibe-coded in 11 minutes. The bot detection was not.</span>
+    <a id="guardLink" href="/guard">Bouncer: Sargas (Lithuanian for "guard"). Watch it live →</a></footer>
 </div>
 <script>
-// Signals the guard uses: a device check, how long the form took, the
-// browser's automation flag, and a hidden field people never fill in.
+// Example horse profiles for the swipe deck (made up, purely for laughs).
+const HORSES = [
+  ["🐴", "Sir Trots-a-Lot, 7", "Looking for a stable relationship. Sigma stallion. 16 hands of pure aura."],
+  ["🦄", "Maregaret, 9", "Unicorn by vibes, horse by paperwork. Delulu is the solulu."],
+  ["🐎", "Neigh-thaniel, 5", "Gym horse. Mewing since foal. Will race you for your carrot."],
+  ["🐴", "Hay Girl Hay, 6", "It's giving pasture princess. Swipe left if you're a donkey."],
+  ["🐎", "Galloping Gary, 11", "Ex-racehorse, now in my soft era. Aura points: unlimited."],
+  ["🦓", "Zeb, 4", "Technically not a horse. Please don't tell Sargas."],
+];
+let hi = 0;
+const deck = document.getElementById("deck");
+function drawDeck() {
+  deck.innerHTML = "";
+  for (let k = 2; k >= 0; k--) {
+    const h = HORSES[(hi + k) % HORSES.length];
+    const el = document.createElement("div");
+    el.className = "pcard";
+    el.style.transform = `translateY(${k * 8}px) scale(${1 - k * 0.04})`;
+    el.style.zIndex = 10 - k;
+    el.innerHTML = `<div class="pic">${h[0]}</div><h3>${h[1]}</h3><p>${h[2]}</p>`;
+    deck.appendChild(el);
+  }
+}
+function swipe(dir) {
+  const top = deck.lastElementChild;
+  if (!top) return;
+  top.classList.add(dir === "r" ? "out-r" : "out-l");
+  const name = HORSES[hi % HORSES.length][1].split(",")[0];
+  document.getElementById("toast").textContent = dir === "r"
+    ? ["It's a match! 💚 Rizz confirmed.", `${name} said yes. Neigh-ver been happier.`, "Mane character moment. Match!"][hi % 3]
+    : ["Left swipe. Brutal. No cap.", `${name} has been left on read. In the stable.`, "Not your vibe. Valid."][hi % 3];
+  setTimeout(() => { hi++; drawDeck(); }, 380);
+}
+document.getElementById("yes").onclick = () => swipe("r");
+document.getElementById("nope").onclick = () => swipe("l");
+drawDeck();
+
+// Signals Sargas uses: a device check, how long the form took, the browser's
+// automation flag, and a hidden field people never fill in.
 let firstTouch = null;
 const form = document.getElementById("form");
 form.addEventListener("focusin", () => { if (firstTouch === null) firstTouch = performance.now(); });
@@ -145,7 +225,7 @@ async function deviceId() {
   let canvasSig = "";
   try {
     const g = c.getContext("2d"); c.width = 200; c.height = 40;
-    g.textBaseline = "top"; g.font = "16px Arial"; g.fillStyle = "#b4441f"; g.fillText("Ruska ✓ 2026", 4, 8);
+    g.textBaseline = "top"; g.font = "16px Arial"; g.fillStyle = "#8a4b1f"; g.fillText("Neighbr 2026", 4, 8);
     canvasSig = c.toDataURL().slice(-64);
   } catch (e) {}
   const parts = [navigator.userAgent, navigator.language, (navigator.languages || []).join(","), screen.width, screen.height,
@@ -157,25 +237,32 @@ async function deviceId() {
 
 let mine = null, pollTimer = null;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
-const VERDICT = {allow: "Looks like a person", review: "Needs a check", block: "Looks like a bot"};
+const VERDICT = {allow: "certified real horse 🐴", review: "kinda sus 👀", block: "bot detected 🤖"};
+function vibe(score) {
+  if (score < 10) return `Sargas rated me ${score}/100 bot. Certified real horse. Aura +1000.`;
+  if (score < 35) return `Sargas rated me ${score}/100 bot. Lowkey sus but still a real horse.`;
+  if (score < 60) return `Sargas rated me ${score}/100 bot. The bouncer is side-eyeing me fr.`;
+  return `Sargas rated me ${score}/100 bot. Caught in 4K.`;
+}
 function showCheck(d) {
   const box = document.getElementById("check"); box.hidden = false;
   document.getElementById("ticket").textContent = d.ticket || "····";
   document.getElementById("score").textContent = d.score ?? 0;
   document.getElementById("needle").style.left = `calc(${Math.min(100, d.score || 0)}% - 2px)`;
   document.getElementById("verdict").textContent = VERDICT[d.action] || "";
+  document.getElementById("share").textContent = vibe(d.score ?? 0);
   const parts = d.parts || [];
   document.getElementById("parts").innerHTML = parts.length
     ? parts.map((p) => `<li><b>${p.contribution > 0 ? "+" : ""}${Number(p.contribution).toFixed(1)}</b><span><strong>${esc(p.label || "")}</strong> (${Number(p.x).toFixed(2)} × ${p.weight}). ${esc(p.reason)}</span></li>`).join("")
-      + `<li><b>−4.0</b><span>Starting point for everyone. Score = 100 / (1 + e<sup>−z</sup>), z = ${(-4 + parts.reduce((a, p) => a + p.contribution, 0)).toFixed(1)}</span></li>`
-    : `<li><b>−4.0</b><span>No factor above zero, so z = −4 and the score stays low. Factors: shared device, inbox, email pattern, form speed, hidden field, network and group timing.</span></li>`;
+      + `<li><b>−4.0</b><span>Everyone starts here. Score = 100 / (1 + e<sup>−z</sup>), z = ${(-4 + parts.reduce((a, p) => a + p.contribution, 0)).toFixed(1)}</span></li>`
+    : `<li><b>−4.0</b><span>No red flags, so z = −4 and you stay a real horse. Sargas checks shared devices, inboxes, email patterns, form speed, a hidden field, network and group timing.</span></li>`;
   const hist = d.history || [];
   if (hist.length) {
     const t0 = hist[0][0], t1 = Math.max(d.now || hist[hist.length - 1][0], t0 + 1);
     let pts = [], prev = null;
     for (const [t, v] of hist) { const x = 300 * (t - t0) / (t1 - t0); if (prev !== null) pts.push(`${x},${40 - prev * 0.36}`); pts.push(`${x},${40 - v * 0.36}`); prev = v; }
     pts.push(`300,${40 - prev * 0.36}`);
-    document.getElementById("spark").innerHTML = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+    document.getElementById("spark").innerHTML = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--saddle)" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
   }
 }
 async function pollMine() {
@@ -195,21 +282,21 @@ if (host.startsWith("trial.")) document.getElementById("guardLink").href = locat
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const out = document.getElementById("result"), btn = document.getElementById("submit");
-  out.className = "result"; btn.disabled = true; btn.textContent = "Creating your trial…";
+  out.className = "result"; btn.disabled = true; btn.textContent = "Sargas is checking your vibe…";
   try {
     const res = await fetch("/api/trial/signup", {method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({email: document.getElementById("email").value, business: document.getElementById("business").value,
         website: document.getElementById("website").value, device_id: await deviceId(),
         fill_ms: firstTouch === null ? 0 : Math.round(performance.now() - firstTouch), webdriver: !!navigator.webdriver})});
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Something went wrong. Please try again.");
+    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Something went wrong. Neigh-ver mind, try again.");
     out.className = "result " + body.action; out.textContent = body.message;
     if (body.token) { mine = {id: body.id, token: body.token}; showCheck(body); pollMine(); }
     if (body.action === "allow") form.reset();
     firstTouch = null;
   } catch (e) {
     out.className = "result error"; out.textContent = e.message;
-  } finally { btn.disabled = false; btn.textContent = "Start free trial"; }
+  } finally { btn.disabled = false; btn.textContent = "Giddy up 🐴"; }
 });
 </script>
 </body>

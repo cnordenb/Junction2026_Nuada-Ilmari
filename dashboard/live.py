@@ -226,9 +226,9 @@ def trial_signup(item: TrialSignup, request: Request) -> dict:
         if _con.execute("SELECT COUNT(*) FROM signups").fetchone()[0] >= MAX_LIVE_ROWS:
             _con.execute("DELETE FROM signups WHERE id IN (SELECT id FROM signups ORDER BY created_at LIMIT 1000)")
     result = judge(row, "attack" if campaign else "visitor", campaign)
-    messages = {"allow": "Your 14-day trial is ready. Check your inbox for the login link.",
-                "review": "Almost there. We need to confirm this signup before your trial starts.",
-                "block": "We couldn't create a trial account with these details."}
+    messages = {"allow": "You're in, bestie. Welcome to the herd. Go find your soulmare. 🐴",
+                "review": "Sargas is side-eyeing you. Kinda sus. A human will check your vibe before you can swipe. 👀",
+                "block": "Neigh. Sargas has seen your type. Bot behaviour detected, no cap. 🤖"}
     out = {"id": result["id"], "ticket": result["ticket"], "action": result["action"],
            "message": messages[result["action"]], "reasons": result["reasons"] if campaign else []}
     if SHOW_SCORE:

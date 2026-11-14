@@ -39,8 +39,8 @@ def signup(client, email, truth=None, **extra):
 def test_pages_and_subdomains(client):
     assert client.get("/trial").status_code == 200
     assert client.get("/guard").status_code == 200
-    assert "Ruska Bookings" in client.get("/", headers={"host": "trial.example.com"}).text
-    assert "Free-Tier Guard" in client.get("/", headers={"host": "guard.example.com"}).text
+    assert "Neighbr" in client.get("/", headers={"host": "trial.example.com"}).text
+    assert "Sargas" in client.get("/", headers={"host": "guard.example.com"}).text
 
 
 def test_ordinary_visitor_is_allowed_and_gets_no_reasons(client):
