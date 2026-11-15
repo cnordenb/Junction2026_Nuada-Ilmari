@@ -5,7 +5,7 @@ About 2 minutes. *Italics: what to show on screen.*
 ## 1. The challenge (0:00–0:15)
 *Open on demo.botswarm.tech.*
 
-We took on Hostinger's challenge: build an AI-powered tool that detects bots and bad actors online. We chose "Spot the swarm": catching bot-nets by how they act together, not one account at a time.
+We took on Hostinger's challenge, Decode the Noise: build an AI-powered tool that detects propaganda, bots and bad actors online. We focused on catching bot-nets by how they act together, not one account at a time.
 
 ## 2. The problem (0:15–0:30)
 

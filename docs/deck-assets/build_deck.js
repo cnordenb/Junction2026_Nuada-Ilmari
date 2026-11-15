@@ -27,7 +27,7 @@ async function icon(Comp, color, size = 256) {
   const pres = new pptxgen();
   pres.layout = "LAYOUT_WIDE"; // 13.33 x 7.5
   pres.title = "Sargas";
-  pres.author = "Team Nuada-Ilmari";
+  pres.author = "Team Sargas";
   pres.theme = { headFontFace: THEME.headFontFace, bodyFontFace: THEME.bodyFontFace };
   const C = pres.SchemeColor;
 
@@ -70,6 +70,17 @@ async function icon(Comp, color, size = 256) {
     s.addImage({ data: img, x: x + d * 0.25, y: y + d * 0.25, w: d * 0.5, h: d * 0.5, objectName: name + " icon", altText: name });
   };
   const T = (s, text, o) => s.addText(text, { isTextBox: true, margin: 0, valign: "top", ...o });
+  const bars = (s, { x, y, w, h, title, rows, max, labelW, fmt }) => {
+    T(s, title, { x, y, w, h: 0.35, fontSize: 14, color: C.text2 });
+    const top = y + 0.5, rh = (h - 0.5) / rows.length, bw = w - labelW - 0.8;
+    rows.forEach(([label, v, col], k) => {
+      const yy = top + k * rh;
+      T(s, label, { x, y: yy, w: labelW - 0.15, h: rh, fontSize: 13, color: C.text1, valign: "middle", align: "right" });
+      const len = Math.max(0.04, bw * v / max);
+      s.addShape(pres.shapes.RECTANGLE, { x: x + labelW, y: yy + rh * 0.2, w: len, h: rh * 0.6, fill: { color: col }, line: { type: "none" }, objectName: label + " bar" });
+      T(s, fmt(v), { x: x + labelW + len + 0.1, y: yy, w: 0.8, h: rh, fontSize: 13, bold: true, color: C.text1, valign: "middle" });
+    });
+  };
 
   // ---------- 1. Title ----------
   pres.addSection({ title: "Opening" });
@@ -77,7 +88,7 @@ async function icon(Comp, color, size = 256) {
   s.addText("Sargas", { placeholder: "title" });
   s.addText("Finding the bot-nets behind propaganda and free-tier abuse", { placeholder: "body" });
   s.addImage({ path: process.env.SHOTS + "/swarm.gif", x: 9.55, y: 0.35, w: 3.2, h: 1.8, objectName: "swarm animation", altText: "Animated swarm of accounts drifting together and linking up" });
-  T(s, "Hostinger challenge: Spot the swarm", { x: 0.8, y: 5.4, w: 9, h: 0.4, fontSize: 16, color: C.accent5 });
+  T(s, "Hostinger challenge: Decode the Noise", { x: 0.8, y: 5.4, w: 9, h: 0.4, fontSize: 16, color: C.accent5 });
   T(s, "Live: botswarm.tech · guard.botswarm.tech · attack.botswarm.tech", { x: 0.8, y: 5.9, w: 9, h: 0.4, fontSize: 16, color: C.background1, bold: true });
   s.addNotes("Propaganda online doesn't need many people. It needs many accounts. Bot-nets turn a handful of operators into what looks like a crowd. We built Sargas to find those swarms of fake accounts, and to explain every verdict.");
 
@@ -88,7 +99,7 @@ async function icon(Comp, color, size = 256) {
   const props = [
     [ic.robot, "Astroturfing", "A few operators run thousands of accounts so one message looks like a crowd's opinion", C.accent1],
     [ic.bolt, "Brigading", "Coordinated accounts pile onto a post, a review page or a vote at the same moment", C.accent2],
-    [ic.chart, "Fake engagement", "Likes, follows and reviews from account farms make a message look trusted", C.accent4],
+    [ic.chart, "Bot-nets", "Networks of automated accounts like, follow and review on cue so a message looks trusted", C.accent4],
   ];
   props.forEach(([img, head, body, col], k) => {
     const x = 0.6 + k * 4.1;
@@ -98,7 +109,7 @@ async function icon(Comp, color, size = 256) {
     T(s, body, { x: x + 0.35, y: 3.55, w: 3.1, h: 1.4, fontSize: 16, color: C.text2 });
   });
   T(s, "Every one of these starts the same way: someone opens a lot of accounts.", { x: 0.6, y: 5.55, w: 12.1, h: 0.6, fontSize: 22, italic: true, color: C.text2 });
-  s.addNotes("The brief talks about bot networks shaping opinion. Astroturfing, brigading and fake engagement all need the same raw material: large numbers of accounts that look real one by one. Stop the accounts, and the propaganda has nothing to speak through.");
+  s.addNotes("The brief talks about bot networks shaping opinion. Astroturfing, brigading and bot-nets all need the same raw material: large numbers of accounts that look real one by one. Stop the accounts, and the propaganda has nothing to speak through.");
 
   // ---------- 3. Free tiers ----------
   s = pres.addSlide({ masterName: "Light content", sectionTitle: "Problem" });
@@ -195,15 +206,13 @@ async function icon(Comp, color, size = 256) {
   pres.addSection({ title: "Results" });
   s = pres.addSlide({ masterName: "Light content", sectionTitle: "Results" });
   s.addText("Every farm caught, every innocent look-alike let through", { placeholder: "title" });
-  s.addChart(pres.charts.BAR, [{ name: "Blocked (%)",
-      labels: ["Throwaway-inbox script", "Gmail alias farm", "Residential proxy farm", "Nightly server batch", "Human-like bot (miss)",
-               "School class", "Company team", "Families on one laptop", "VPN users", "Newsletter rush"],
-      values: [100, 100, 100, 100, 0, 0, 0, 0, 0, 0] }],
-    { x: 0.6, y: 1.5, w: 7.6, h: 5.2, barDir: "bar", chartColors: [HEX.accent1, HEX.accent1, HEX.accent1, HEX.accent1, HEX.accent5, HEX.accent3, HEX.accent3, HEX.accent3, HEX.accent3, HEX.accent3],
-      showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0\"%\"", dataLabelFontSize: 12, dataLabelColor: HEX.dk1, dataLabelFontFace: "+mn-lt",
-      catAxisLabelColor: HEX.dk2, catAxisLabelFontSize: 13, catAxisLabelFontFace: "+mn-lt", catAxisOrientation: "maxMin",
-      valAxisHidden: true, valAxisMaxVal: 115, valGridLine: { style: "none" }, catGridLine: { style: "none" }, showLegend: false,
-      showTitle: true, title: "Share blocked per group, 5 forged signup logs", titleFontSize: 14, titleColor: HEX.dk2, titleFontFace: "+mn-lt", objectName: "blocked per group chart" });
+  {
+    const names = ["Throwaway-inbox script", "Gmail alias farm", "Residential proxy farm", "Nightly server batch", "Human-like bot (miss)",
+                   "School class", "Company team", "Families on one laptop", "VPN users", "Newsletter rush"];
+    const vals = [100, 100, 100, 100, 0, 0, 0, 0, 0, 0];
+    const cols = [C.accent1, C.accent1, C.accent1, C.accent1, C.accent5, C.accent3, C.accent3, C.accent3, C.accent3, C.accent3];
+    bars(s, { x: 0.6, y: 1.5, w: 7.6, h: 5.2, title: "Share blocked per group, 5 forged signup logs", rows: names.map((n, k) => [n, vals[k], cols[k]]), max: 100, labelW: 2.9, fmt: v => v + "%" });
+  }
   const stats = [["0", "of 16,864 real people blocked", C.accent3], ["85.7%", "of bots blocked (also on attackers we never tuned for)", C.accent1], ["0.93", "AUC: how well the score separates bots from people", C.accent4]];
   stats.forEach(([big, small, col], k) => {
     T(s, big, { x: 8.6, y: 1.7 + k * 1.7, w: 4.1, h: 0.9, fontSize: 54, bold: true, color: col, fontFace: THEME.headFontFace });
@@ -214,12 +223,8 @@ async function icon(Comp, color, size = 256) {
   // ---------- 7. AI where it helps ----------
   s = pres.addSlide({ masterName: "Light content", sectionTitle: "Results" });
   s.addText("AI only where it measurably beat the algorithm", { placeholder: "title" });
-  s.addChart(pres.charts.BAR, [{ name: "Real people flagged (of 60)", labels: ["Algorithm", "d1-omni-600M as judge", "LFM3-VL-2B as judge"], values: [0, 17, 10] }],
-    { x: 0.6, y: 1.5, w: 5.6, h: 3.4, barDir: "col", chartColors: [HEX.accent3, HEX.accent1, HEX.accent1],
-      showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 14, dataLabelColor: HEX.dk1, dataLabelFontFace: "+mn-lt",
-      catAxisLabelColor: HEX.dk2, catAxisLabelFontSize: 13, catAxisLabelFontFace: "+mn-lt", valAxisHidden: true, valAxisMaxVal: 20,
-      valGridLine: { style: "none" }, catGridLine: { style: "none" }, showLegend: false,
-      showTitle: true, title: "Real people flagged on 120 labelled signups", titleFontSize: 14, titleColor: HEX.dk2, titleFontFace: "+mn-lt", objectName: "ai judges chart" });
+  bars(s, { x: 0.6, y: 1.5, w: 5.6, h: 3.4, title: "Real people flagged on 120 labelled signups", max: 20, labelW: 2.4, fmt: v => String(v),
+    rows: [["Algorithm", 0, C.accent3], ["d1-omni-600M as judge", 17, C.accent1], ["LFM3-VL-2B as judge", 10, C.accent1]] });
   T(s, "Both on-server models lost as judges. Hand-picked examples made the LLM look perfect; the labelled benchmark didn't.",
     { x: 0.6, y: 5.1, w: 5.6, h: 1.2, fontSize: 16, italic: true, color: C.text2 });
   const jobs = [
@@ -258,9 +263,9 @@ async function icon(Comp, color, size = 256) {
   pres.addSection({ title: "Close" });
   s = pres.addSlide({ masterName: "Dark title", sectionTitle: "Close" });
   s.addText("Find the swarm before it speaks", { placeholder: "title", fontSize: 48 });
-  s.addText("Sargas: bot-net detection for propaganda and free-tier abuse. Live on Hostinger now: botswarm.tech", { placeholder: "body" });
+  s.addText("Sargas: bot-net detection for propaganda and free-tier abuse. Live on Hostinger now: demo.botswarm.tech", { placeholder: "body" });
   s.addImage({ path: process.env.SHOTS + "/swarm.gif", x: 9.55, y: 5.0, w: 3.2, h: 1.8, objectName: "swarm animation", altText: "Animated swarm of accounts drifting together and linking up" });
-  T(s, "Team Nuada-Ilmari · github.com/cnordenb/Junction2026_Sargas", { x: 0.8, y: 5.9, w: 8.8, h: 0.4, fontSize: 16, color: C.accent5 });
+  T(s, "Team Sargas · Demo: demo.botswarm.tech · github.com/cnordenb/Junction2026_Sargas", { x: 0.8, y: 5.9, w: 8.8, h: 0.4, fontSize: 16, color: C.accent5 });
   s.addNotes("Propaganda needs a crowd, and bot-nets fake one through free tiers. Sargas finds the swarm before it speaks, explains every verdict, and shows its own error rate. It's live on Hostinger right now: scan, sign up and try to get past it.");
 
   const out = process.env.OUT;
