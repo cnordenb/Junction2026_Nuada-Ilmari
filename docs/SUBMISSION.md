@@ -1,24 +1,46 @@
-# Junction submission (draft)
+# Junction submission
 
-**Project:** Sargas: catching swarms of fake signups on free tiers
-**Challenge:** Hostinger, Decode the Noise ("Spot the swarm", with parts of "Clean the traffic")
-**Live:** https://botswarm.tech (victim site) · https://guard.botswarm.tech (dashboard) · https://attack.botswarm.tech (attack console, demo key on request)
-**Code:** https://github.com/cnordenb/Junction2026_Nuada-Ilmari
+Ready to paste into the Junction form. Pitch deck: [docs/Sargas.pptx](Sargas.pptx).
 
-## One-liner
+## Project Name
 
-Cloudflare stops bad requests. Sargas stops bad accounts: it links fake signups into swarms, explains every verdict with one published equation, and shows its own error rates.
+Sargas
 
-## What it does
+## Punchline (max 200 characters)
 
-Free tiers get farmed by bots opening hundreds of accounts. Sargas scores every signup live with 18 factors (inbox tricks, devices, form behaviour, mouse and typing rhythm, latency, an on-server AI model, and the linked group's timing against chance), blocks swarms, catches farms that slip in as the group grows, and bans IPs behind repeated bot accounts. People see their own live score on their phone; site owners see every factor, a review queue and AI summaries of each swarm.
+Sargas spots bot-nets farming free-tier signups, links fake accounts into swarms, and explains every verdict live.
 
-## Detection quality and honesty
+## Description (markdown, max 5000 characters)
 
-- 10 forged signup logs with an answer key, including attackers we did not tune for and innocent look-alikes (a class on one IP, a company team, families on one laptop, VPN users, a newsletter rush): **0 of 16,864 real people blocked, 85.7% of bots blocked**.
-- We benchmarked two AI models as judges on labelled data; both lost to the transparent algorithm (they flagged 10 and 17 real people out of 60), so AI is used only where it measured better: reading email patterns (AUC 0.80), ranking the review queue, and writing plain-language summaries.
-- Known miss, shown on the dashboard: a careful bot that varies every detail and replays human input.
+```markdown
+## The problem
+Free tiers get farmed. Bot-nets open hundreds of fake accounts for spam, phishing and free compute, and each account on its own looks like a real person. Hostinger itself closed its free hosting brand, 000webhost, in 2024. Per-request tools judge one request at a time; a careful bot-net rotates residential IPs and passes them.
 
-## Built with
+## What we built
+**Sargas** (Lithuanian for *guard*) judges **groups of accounts**, not single requests. It links signups that share rare details (one device behind 15 "different people", one inbox spelled ten ways, one email template, robotic mouse movement) and tests whether their timing beats chance against 4,000 random groups. When a swarm forms, every account in it is blocked, **including the ones that already got in**.
 
-Python, FastAPI, SQLite, NumPy/SciPy; llama.cpp server with Liquid AI d1-omni-600M and LFM3-VL-2B; Docker Compose and Caddy on a Hostinger KVM 2 VPS; Hugging Face dataset airt-ml/twitter-human-bots for prompt benchmarks.
+Live on our Hostinger VPS:
+- **botswarm.tech**: Neighbr, a satirical "Tinder for horses" with a free tier, protected by Sargas. Sign up and watch your own bot score update live.
+- **guard.botswarm.tech**: the dashboard: every person's score with each factor, swarms with plain-language summaries, a review queue, IP bans with on/off switches, and our accuracy on labelled data.
+- **attack.botswarm.tech**: launch real bot campaigns against the site and watch them get caught.
+
+## Explainable by design
+One published equation scores every signup: `score = 100 / (1 + e^-z)`, `z = -4 + Σ weight × factor`, with 18 factors each measured from 0 to 1: inbox tricks, device reuse, hidden form field, typing rhythm, mouse movement, network latency, an on-server AI model, and the linked group's size, shared details and timing. Every point shows its reason in plain language. Natural human movement and school/company groups *lower* the score.
+
+## Honest measurement (40% of the brief, so we took it seriously)
+- Tested on 10 forged signup logs with an answer key, including attackers we never tuned for and innocent look-alikes: a class on one campus IP, a company team, families sharing a laptop, VPN users, a newsletter rush.
+- **0 of 16,864 real people blocked. 85.7% of bots blocked.** AUC 0.93.
+- False positives are designed against: weak signals can't block alone, there is a review band, and IP bans need two blocked accounts and can be switched off or reset.
+- **Our known miss is on the dashboard:** a careful bot that replays human input gets in.
+
+## AI where it measurably helps
+We ran two open models on the VPS with llama.cpp (Liquid AI's d1-omni-600M and LFM3-VL-2B) and benchmarked them on labelled data, including a Hugging Face dataset of real Twitter bots. **As judges, both lost to our algorithm** (they flagged 10 and 17 of 60 real people; the algorithm flagged 0). So the algorithm decides, and AI does what it measured better at: reading machine-made email patterns (AUC 0.80), ranking the review queue (AUC 0.90 → 0.94), and summarising each swarm in plain words. Hand-picked examples made the LLM look perfect; the benchmark didn't. That's why we measure.
+
+## Tech
+Python, FastAPI, SQLite, NumPy/SciPy · llama.cpp server with Liquid AI d1-omni-600M and LFM3-VL-2B · Docker Compose and Caddy (HTTPS) on a Hostinger KVM 2 VPS · 91 passing automated tests plus prompt benchmarks.
+```
+
+## Links
+
+- Live: https://botswarm.tech · https://guard.botswarm.tech · https://attack.botswarm.tech (demo key on request)
+- Code: https://github.com/cnordenb/Junction2026_Nuada-Ilmari
