@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sargas Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root { --bg:#0f1218; --panel:#171c26; --line:#273042; --fg:#eef1f6; --fg2:#a9b2c3; --red:#ff6b61; --amber:#f2b84b; --green:#4fd08a; --blue:#7aa2f7;
+  --display:"Space Grotesk", system-ui, sans-serif; --body:"Inter", system-ui, -apple-system, sans-serif; color-scheme:dark }
+* { box-sizing:border-box }
+body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.55 var(--body) }
+.wrap { max-width:1000px; margin:0 auto; padding:56px max(20px, env(safe-area-inset-left, 0px)) 64px }
+h1 { font:700 clamp(40px, 7vw, 64px)/1.05 var(--display); margin:0 0 10px }
+.lede { color:var(--fg2); font-size:19px; max-width:42em; margin:0 0 36px }
+.cards { display:grid; gap:16px }
+.card { display:grid; grid-template-columns:auto 1fr; gap:6px 20px; background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px 24px; text-decoration:none; color:inherit }
+.card:hover { border-color:var(--fg2) }
+.card:focus-visible { outline:3px solid var(--blue); outline-offset:3px }
+.n { grid-row:span 3; width:48px; height:48px; border-radius:50%; display:grid; place-items:center; font:700 22px var(--display); color:var(--bg) }
+.role { font-size:13px; font-weight:600; letter-spacing:.1em; text-transform:uppercase }
+.url { font:700 26px var(--display); overflow-wrap:anywhere }
+.what { color:var(--fg2); margin:0 }
+.tip { margin-top:28px; color:var(--fg2); font-size:15px; border-left:3px solid var(--amber); padding-left:14px }
+@media (max-width:520px) { .card { grid-template-columns:1fr } .n { grid-row:auto } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Sargas</h1>
+  <p class="lede">Sargas spots bot-nets by looking at groups of signups, stopping the fake accounts behind propaganda and free-trial abuse. The demo is three live sites: one being protected, the detector's dashboard, and a console for attacking it.</p>
+  <div class="cards">
+    <a class="card" href="https://botswarm.tech">
+      <span class="n" style="background:var(--green)">1</span>
+      <span class="role" style="color:var(--green)">The site being protected</span>
+      <span class="url">botswarm.tech</span>
+      <p class="what">Neighbr, a satirical "Tinder for horses" with a free tier. Sign up, ideally on your phone, and you'll see your own live bot score with the reasons behind it.</p>
+    </a>
+    <a class="card" href="https://guard.botswarm.tech">
+      <span class="n" style="background:var(--blue)">2</span>
+      <span class="role" style="color:var(--blue)">The Sargas dashboard</span>
+      <span class="url">guard.botswarm.tech</span>
+      <p class="what">Every signup's score and reasons, bot groups as they're detected (with AI summaries), the review queue, IP bans, and how Sargas did on labelled test data.</p>
+    </a>
+    <a class="card" href="https://attack.botswarm.tech">
+      <span class="n" style="background:var(--red)">3</span>
+      <span class="role" style="color:var(--red)">The attack console</span>
+      <span class="url">attack.botswarm.tech</span>
+      <p class="what">Launch bot campaigns against Neighbr, from a simple script to a bot-net with realistic names and a new IP for every account, then watch them get caught on the dashboard. Needs the demo key, which we'll give you at our table or on request.</p>
+    </a>
+  </div>
+  <p class="tip">Best order: open the dashboard, sign up on Neighbr from your phone, then launch an attack and watch the dashboard.</p>
+</main>
+</body>
+</html>

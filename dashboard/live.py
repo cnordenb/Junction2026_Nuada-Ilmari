@@ -755,3 +755,9 @@ def _review_queue(rows) -> list[dict]:
                     "ai_p": p, "rank": round(blend, 3), "action": r["action_now"],
                     "reason": (json.loads(r["reasons"] or "[]") or [""])[0][:140]})
     return sorted(out, key=lambda q: -q["rank"])[:8]
+
+
+@router.get("/demo")
+def demo_page() -> FileResponse:
+    """One page linking the three demo sites, for the submission's single demo link."""
+    return FileResponse(STATIC / "demo.html", media_type="text/html")

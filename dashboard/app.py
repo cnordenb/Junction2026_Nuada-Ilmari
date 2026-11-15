@@ -405,4 +405,6 @@ async def _subdomains(request: Request, call_next):
             return live.guard_page()
         if host.startswith("attack."):
             return live.attack_page()
+        if host.startswith("demo."):
+            return live.demo_page()
     return await call_next(request)
