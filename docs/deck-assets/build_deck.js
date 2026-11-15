@@ -77,9 +77,9 @@ async function icon(Comp, color, size = 256) {
   s.addText("Sargas", { placeholder: "title" });
   s.addText("Finding the bot-nets behind propaganda and free-tier abuse", { placeholder: "body" });
   s.addImage({ path: process.env.SHOTS + "/swarm.gif", x: 9.55, y: 0.35, w: 3.2, h: 1.8, objectName: "swarm animation", altText: "Animated swarm of accounts drifting together and linking up" });
-  T(s, "Lithuanian for \"guard\" · Hostinger challenge: Spot the swarm", { x: 0.8, y: 5.4, w: 9, h: 0.4, fontSize: 16, color: C.accent5 });
+  T(s, "Hostinger challenge: Spot the swarm", { x: 0.8, y: 5.4, w: 9, h: 0.4, fontSize: 16, color: C.accent5 });
   T(s, "Live: botswarm.tech · guard.botswarm.tech · attack.botswarm.tech", { x: 0.8, y: 5.9, w: 9, h: 0.4, fontSize: 16, color: C.background1, bold: true });
-  s.addNotes("Propaganda online doesn't need many people. It needs many accounts. Bot-nets turn a handful of operators into what looks like a crowd. We built Sargas, Lithuanian for guard, to find those swarms of fake accounts, and to explain every verdict.");
+  s.addNotes("Propaganda online doesn't need many people. It needs many accounts. Bot-nets turn a handful of operators into what looks like a crowd. We built Sargas to find those swarms of fake accounts, and to explain every verdict.");
 
   // ---------- 2. Propaganda ----------
   pres.addSection({ title: "Problem" });
@@ -260,7 +260,7 @@ async function icon(Comp, color, size = 256) {
   s.addText("Find the swarm before it speaks", { placeholder: "title", fontSize: 48 });
   s.addText("Sargas: bot-net detection for propaganda and free-tier abuse. Live on Hostinger now: botswarm.tech", { placeholder: "body" });
   s.addImage({ path: process.env.SHOTS + "/swarm.gif", x: 9.55, y: 5.0, w: 3.2, h: 1.8, objectName: "swarm animation", altText: "Animated swarm of accounts drifting together and linking up" });
-  T(s, "Team Nuada-Ilmari · github.com/cnordenb/Junction2026_Nuada-Ilmari", { x: 0.8, y: 5.9, w: 8.8, h: 0.4, fontSize: 16, color: C.accent5 });
+  T(s, "Team Nuada-Ilmari · github.com/cnordenb/Junction2026_Sargas", { x: 0.8, y: 5.9, w: 8.8, h: 0.4, fontSize: 16, color: C.accent5 });
   s.addNotes("Propaganda needs a crowd, and bot-nets fake one through free tiers. Sargas finds the swarm before it speaks, explains every verdict, and shows its own error rate. It's live on Hostinger right now: scan, sign up and try to get past it.");
 
   const out = process.env.OUT;

@@ -1,6 +1,6 @@
 # Sargas
 
-Sargas (Lithuanian for "guard") spots bot-nets by looking at **groups of signups**, stopping the fake accounts behind propaganda and free-trial abuse. Built for the Hostinger challenge at Junction 2026.
+Sargas spots bot-nets by looking at **groups of signups**, stopping the fake accounts behind propaganda and free-trial abuse. Built for the Hostinger challenge at Junction 2026.
 
 - **Against propaganda:** astroturfing, brigading and fake reviews need thousands of fake accounts. Sargas stops them at signup.
 - **For site owners:** bot-nets exploit free trials. Sargas blocks the swarm, including accounts that already got in.

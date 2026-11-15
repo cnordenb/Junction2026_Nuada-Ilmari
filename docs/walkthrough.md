@@ -13,7 +13,7 @@ Propaganda needs a crowd. Astroturfing, brigading and fake reviews all run on th
 
 ## 3. Our solution and its two applications (0:30–0:45)
 
-So we built Sargas, Lithuanian for "guard". It spots bot-nets by looking at groups of signups. That gives us two applications: it starves propaganda of the fake accounts it needs, and it stops bot-nets from exploiting free trials.
+So we built Sargas. It spots bot-nets by looking at groups of signups. That gives us two applications: it starves propaganda of the fake accounts it needs, and it stops bot-nets from exploiting free trials.
 
 ## 4. Live demo (0:45–1:20)
 *botswarm.tech: sign up on your phone and show your score.*

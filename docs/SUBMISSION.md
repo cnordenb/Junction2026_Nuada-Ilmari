@@ -17,7 +17,7 @@ Sargas spots bot-nets by looking at groups of signups, stopping the fake account
 Propaganda online needs a crowd. Astroturfing, brigading and fake reviews run on thousands of fake accounts, and each one looks like a real person on its own. Most of those accounts are opened through free tiers, so site owners pay as well: free trials used up by bot-nets, and spam and phishing sent under their name. Blocking one request or one IP at a time misses them, because bot-nets rotate home IP addresses.
 
 ## What we built
-Sargas (Lithuanian for "guard") finds fake accounts by looking at groups, not single signups. It links signups that share rare details, such as one device behind 15 "different people", one inbox spelled ten ways, or one email template, and checks whether they arrived faster than chance. When a group is confirmed, every account in it is blocked, including the ones that already got in.
+Sargas finds fake accounts by looking at groups, not single signups. It links signups that share rare details, such as one device behind 15 "different people", one inbox spelled ten ways, or one email template, and checks whether they arrived faster than chance. When a group is confirmed, every account in it is blocked, including the ones that already got in.
 
 It has two uses:
 - **Against propaganda:** stopping the fake accounts that astroturfing and brigading depend on.
