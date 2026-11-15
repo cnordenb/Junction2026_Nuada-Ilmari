@@ -14,30 +14,34 @@ Propaganda needs a crowd. Sargas finds the bot-nets faking one through free-tier
 
 ```markdown
 ## The problem
-Propaganda online runs on fake accounts. Astroturfing, brigading and fake engagement all need many accounts that each look like a real person, and those accounts come from free tiers. The site owners who run those free tiers pay for it: burned compute and support time, and spam and phishing sent under their name. Each fake account looks real on its own, and farms rotate home IP addresses, so per-request blocking misses them.
+Propaganda online needs a crowd. Astroturfing, brigading and fake reviews run on thousands of fake accounts, and each one looks like a real person on its own. Most of those accounts are opened through free tiers, so site owners pay as well: free trials used up by bot-nets, and spam and phishing sent under their name. Blocking one request or one IP at a time misses them, because bot-nets rotate home IP addresses.
 
 ## What we built
-**Sargas** (Lithuanian for *guard*) judges **groups of accounts**, not single requests. It links signups that share rare details (one device behind 15 "different people", one inbox spelled ten ways, one email template, robotic mouse movement) and tests whether their timing beats chance against 4,000 random groups. When a swarm forms, every account in it is blocked, **including the ones that already got in**.
+Sargas (Lithuanian for "guard") finds fake accounts by looking at groups, not single signups. It links signups that share rare details, such as one device behind 15 "different people", one inbox spelled ten ways, or one email template, and checks whether they arrived faster than chance. When a group is confirmed, every account in it is blocked, including the ones that already got in.
 
-Live on our Hostinger VPS:
-- **botswarm.tech**: Neighbr, a satirical "Tinder for horses" with a free tier, protected by Sargas. Sign up and watch your own bot score update live.
-- **guard.botswarm.tech**: the dashboard: every person's score with each factor, swarms with plain-language summaries, a review queue, IP bans with on/off switches, and our accuracy on labelled data.
-- **attack.botswarm.tech**: launch real bot campaigns against the site and watch them get caught.
+It has two uses:
+- **Against propaganda:** stopping the fake accounts that astroturfing and brigading depend on.
+- **For site owners:** stopping bot-nets from exploiting free trials.
 
-## Explainable by design
-One published equation scores every signup: `score = 100 / (1 + e^-z)`, `z = -4 + Σ weight × factor`, with 18 factors each measured from 0 to 1: inbox tricks, device reuse, hidden form field, typing rhythm, mouse movement, network latency, an on-server AI model, and the linked group's size, shared details and timing. Every point shows its reason in plain language. Natural human movement and school/company groups *lower* the score.
+Live demo:
+- **botswarm.tech:** Neighbr, a satirical "Tinder for horses" with a free tier, protected by Sargas. Sign up and see your own bot score live.
+- **guard.botswarm.tech:** the dashboard. Every signup's score and reasons, detected groups, IP bans and test results.
+- **attack.botswarm.tech:** launch bot campaigns against the site and watch them get caught.
 
-## Honest measurement (40% of the brief, so we took it seriously)
-- Tested on 10 forged signup logs with an answer key, including attackers we never tuned for and innocent look-alikes: a class on one campus IP, a company team, families sharing a laptop, VPN users, a newsletter rush.
-- **0 of 16,864 real people blocked. 85.7% of bots blocked.** AUC 0.93.
-- False positives are designed against: weak signals can't block alone, there is a review band, and IP bans need two blocked accounts and can be switched off or reset.
-- **Our known miss is on the dashboard:** a careful bot that replays human input gets in.
+## How the score works
+Each signup is scored with one published formula: `score = 100 / (1 + e^-z)`, where `z = -4 + Σ weight × factor`. There are 18 factors, each measured from 0 to 1. They cover the signup itself (throwaway inbox, reused device, hidden form field filled), behaviour on the page (typing rhythm, mouse movement, network latency) and the group it belongs to (size, shared details, timing). Natural human movement and school or company groups lower the score. Every point is shown with its reason.
 
-## AI where it measurably helps
-We ran two open models on the VPS with llama.cpp (Liquid AI's d1-omni-600M and LFM3-VL-2B) and benchmarked them on labelled data, including a Hugging Face dataset of real Twitter bots. **As judges, both lost to our algorithm** (they flagged 10 and 17 of 60 real people; the algorithm flagged 0). So the algorithm decides, and AI does what it measured better at: reading machine-made email patterns (AUC 0.80), ranking the review queue (AUC 0.90 → 0.94), and summarising each swarm in plain words. Hand-picked examples made the LLM look perfect; the benchmark didn't. That's why we measure.
+We built it by starting from the signals bot-nets can't easily hide. We set each weight by what the signal means, and tuned them on forged signup logs with planted bots and innocent look-alikes: a school class on one IP, a company team, families sharing a laptop, VPN users. We then tested on attackers we hadn't tuned for. Result: 0 of 16,864 real people blocked, and 85.7% of bots blocked. A bot that copies human behaviour closely still gets through, and the dashboard says so.
 
-## Tech
-Python, FastAPI, SQLite, NumPy/SciPy · llama.cpp server with Liquid AI d1-omni-600M and LFM3-VL-2B · Docker Compose and Caddy (HTTPS) on a Hostinger KVM 2 VPS · 91 passing automated tests plus prompt benchmarks.
+## AI
+Two open models run on our own server: Liquid AI's d1-omni-600M and LFM3-VL-2B. We tested them as judges on labelled data and they did worse than the formula (they flagged 17 and 10 of 60 real people; the formula flagged 0). So the formula makes the decisions, and AI does what it did better in our tests: spotting machine-made email addresses, ranking the review queue, and summarising each detected group in plain words.
+
+## Tech, and why
+- **Python and FastAPI:** fast to build, and easy to read.
+- **NumPy and SciPy:** for the statistics, such as comparing a group's timing against 4,000 random groups.
+- **llama.cpp:** runs the AI models on our own server, so no user data leaves it and there's no API cost.
+- **Docker Compose and Caddy:** one-command deploys with automatic HTTPS.
+- **Hostinger:** everything runs on a Hostinger VPS, under our domain botswarm.tech, also from Hostinger. 91 automated tests.
 ```
 
 ## Links
