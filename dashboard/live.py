@@ -680,7 +680,7 @@ SUMMARY_SYSTEM = ("You write for the owner of a small website. In under 40 words
 
 
 def lfm_summary(cluster: dict, live_members: int) -> str:
-    facts = {"verdict": cluster["action"], "signups_in_group": cluster["size"], "from_live_site": live_members,
+    facts = {"verdict": cluster["action"], "signups_in_group": cluster["size"],
              "shared": [e["text"] for e in cluster["evidence"]][:4], "timing": cluster["timing"], "why": cluster["why"][:1]}
     body = {"messages": [{"role": "system", "content": SUMMARY_SYSTEM}, {"role": "user", "content": json.dumps(facts)}],
             "temperature": 0.2, "max_tokens": 120, "chat_template_kwargs": {"enable_thinking": False},
