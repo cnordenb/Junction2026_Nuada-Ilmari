@@ -47,4 +47,4 @@ Two open models run on our own server: Liquid AI's d1-omni-600M and LFM3-VL-2B. 
 ## Links
 
 - Live: https://botswarm.tech · https://guard.botswarm.tech · https://attack.botswarm.tech (demo key on request)
-- Code: https://github.com/cnordenb/Junction2026_Nuada-Ilmari
+- Code: https://github.com/cnordenb/Junction2026_Sargas
