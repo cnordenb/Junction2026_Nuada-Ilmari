@@ -8,13 +8,13 @@ Sargas
 
 ## Punchline (max 200 characters)
 
-Sargas spots bot-nets farming free-tier signups, links fake accounts into swarms, and explains every verdict live.
+Propaganda needs a crowd. Sargas finds the bot-nets faking one through free-tier signups, and explains every verdict live.
 
 ## Description (markdown, max 5000 characters)
 
 ```markdown
 ## The problem
-Free tiers get farmed. Bot-nets open hundreds of fake accounts for spam, phishing and free compute, and each account on its own looks like a real person. Hostinger itself closed its free hosting brand, 000webhost, in 2024. Per-request tools judge one request at a time; a careful bot-net rotates residential IPs and passes them.
+Propaganda online runs on fake accounts. Astroturfing, brigading and fake engagement all need many accounts that each look like a real person, and those accounts come from free tiers. The site owners who run those free tiers pay for it: burned compute and support time, and spam and phishing sent under their name. Each fake account looks real on its own, and farms rotate home IP addresses, so per-request blocking misses them.
 
 ## What we built
 **Sargas** (Lithuanian for *guard*) judges **groups of accounts**, not single requests. It links signups that share rare details (one device behind 15 "different people", one inbox spelled ten ways, one email template, robotic mouse movement) and tests whether their timing beats chance against 4,000 random groups. When a swarm forms, every account in it is blocked, **including the ones that already got in**.

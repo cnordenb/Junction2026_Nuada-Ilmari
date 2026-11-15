@@ -2,7 +2,7 @@
 
 **Sargas** (Lithuanian for *guard*) catches swarms of fake signups on free tiers and explains every verdict. Junction 2026, Hostinger challenge ("Spot the swarm", with parts of "Clean the traffic").
 
-Free tiers get farmed: bots open hundreds of accounts for spam, phishing and free compute. Per-request tools such as Cloudflare judge one request at a time. Sargas judges **groups of accounts**: one device behind 15 "different people", one inbox spelled ten ways, one email template, signups faster than chance. Farms that slip in are caught as the group grows, and their earlier accounts are suspended.
+Propaganda online runs on fake accounts: astroturfing, brigading and fake engagement all need many accounts that each look real. Those accounts come from free tiers, and the site owners who run them pay for it in burned resources, spam and phishing under their name. Sargas judges **groups of accounts**, not single requests: one device behind 15 "different people", one inbox spelled ten ways, one email template, signups faster than chance. Farms that slip in are caught as the group grows, and their earlier accounts are suspended.
 
 ## Live (Hostinger VPS)
 
