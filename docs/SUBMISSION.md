@@ -8,7 +8,7 @@ Sargas
 
 ## Punchline (max 200 characters)
 
-Propaganda needs a crowd. Sargas finds the bot-nets faking one through free-tier signups, and explains every verdict live.
+Sargas spots bot-nets by looking at groups of signups, stopping the fake accounts behind propaganda and free-trial abuse.
 
 ## Description (markdown, max 5000 characters)
 
