@@ -688,7 +688,7 @@ def lfm_summary(cluster: dict, live_members: int) -> str:
     req = urllib.request.Request(LFM_URL.rstrip("/") + "/v1/chat/completions", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(json.loads(res.read())["choices"][0]["message"]["content"])["summary"][:400]
+        return json.loads(json.loads(res.read())["choices"][0]["message"]["content"])["summary"][:400].strip().rstrip("',\" ")
 
 
 def _ai_step() -> bool:
